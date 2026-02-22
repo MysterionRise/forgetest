@@ -129,8 +129,14 @@ mod tests {
     #[tokio::test]
     async fn prompt_matching() {
         let mut responses = HashMap::new();
-        responses.insert("fibonacci".to_string(), "fn fibonacci(n: u64) -> u64 { 0 }".to_string());
-        responses.insert("add".to_string(), "fn add(a: i32, b: i32) -> i32 { a + b }".to_string());
+        responses.insert(
+            "fibonacci".to_string(),
+            "fn fibonacci(n: u64) -> u64 { 0 }".to_string(),
+        );
+        responses.insert(
+            "add".to_string(),
+            "fn add(a: i32, b: i32) -> i32 { a + b }".to_string(),
+        );
 
         let provider = MockProvider::new(responses);
 

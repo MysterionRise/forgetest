@@ -65,7 +65,11 @@ impl CodeRunner for LocalRunner {
     async fn compile(&self, request: &CompileRequest) -> Result<CompilationResult> {
         let sandbox = self.create_sandbox(request.language, request.timeout_secs)?;
         sandbox.write_source(&request.code)?;
-        for dep in self.default_dependencies.iter().chain(request.dependencies.iter()) {
+        for dep in self
+            .default_dependencies
+            .iter()
+            .chain(request.dependencies.iter())
+        {
             sandbox.add_dependency(dep)?;
         }
         compiler::compile(&sandbox).await
@@ -75,7 +79,11 @@ impl CodeRunner for LocalRunner {
         let sandbox = self.create_sandbox(request.language, request.timeout_secs)?;
         sandbox.write_source(&request.code)?;
         sandbox.write_test(&request.test_code)?;
-        for dep in self.default_dependencies.iter().chain(request.dependencies.iter()) {
+        for dep in self
+            .default_dependencies
+            .iter()
+            .chain(request.dependencies.iter())
+        {
             sandbox.add_dependency(dep)?;
         }
 
@@ -85,7 +93,11 @@ impl CodeRunner for LocalRunner {
     async fn run_clippy(&self, request: &ClippyRequest) -> Result<ClippyResult> {
         let sandbox = self.create_sandbox(request.language, request.timeout_secs)?;
         sandbox.write_source(&request.code)?;
-        for dep in self.default_dependencies.iter().chain(request.dependencies.iter()) {
+        for dep in self
+            .default_dependencies
+            .iter()
+            .chain(request.dependencies.iter())
+        {
             sandbox.add_dependency(dep)?;
         }
         clippy::run_clippy(&sandbox).await
@@ -93,6 +105,7 @@ impl CodeRunner for LocalRunner {
 }
 
 /// Run a full eval: compile, test, clippy, compute score.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_eval(
     runner: &LocalRunner,
     case: &EvalCase,
@@ -127,10 +140,7 @@ pub async fn run_eval(
     } else {
         None
     };
-    let test_execution_ms = test_execution
-        .as_ref()
-        .map(|t| t.duration_ms)
-        .unwrap_or(0);
+    let test_execution_ms = test_execution.as_ref().map(|t| t.duration_ms).unwrap_or(0);
 
     // Run clippy if compilation succeeded
     let clippy_result = if compilation.success {
@@ -206,7 +216,11 @@ mod tests {
         };
 
         let result = runner.run_tests(&request).await.unwrap();
-        assert!(result.passed >= 1, "expected at least 1 passing test, got {}", result.passed);
+        assert!(
+            result.passed >= 1,
+            "expected at least 1 passing test, got {}",
+            result.passed
+        );
         assert_eq!(result.failed, 0);
     }
 
@@ -252,14 +266,17 @@ mod tests {
             expectations: forgetest_core::model::Expectations {
                 should_compile: true,
                 should_pass_tests: true,
-                test_file: Some(r#"
+                test_file: Some(
+                    r#"
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn test_add() { assert_eq!(add(1, 2), 3); }
 }
-"#.to_string()),
+"#
+                    .to_string(),
+                ),
                 expected_functions: vec!["add".into()],
                 ..Default::default()
             },
@@ -297,6 +314,10 @@ mod tests {
         assert_eq!(tests.failed, 0);
 
         let score = forgetest_core::results::Score::compute(&result, &case.expectations);
-        assert!(score.overall > 0.5, "overall score should be > 0.5, got {}", score.overall);
+        assert!(
+            score.overall > 0.5,
+            "overall score should be > 0.5, got {}",
+            score.overall
+        );
     }
 }

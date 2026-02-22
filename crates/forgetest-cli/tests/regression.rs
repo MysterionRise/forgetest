@@ -174,8 +174,8 @@ fn multi_model_regression() {
     ]);
 
     let current = make_report(vec![
-        make_result("fib", "model-a", true, 3, 0),   // same
-        make_result("fib", "model-b", true, 0, 3),   // regression
+        make_result("fib", "model-a", true, 3, 0), // same
+        make_result("fib", "model-b", true, 0, 3), // regression
     ]);
 
     let report = current.compare(&baseline, 0.05);

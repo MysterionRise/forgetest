@@ -58,6 +58,7 @@ impl ProgressReporter for ConsoleReporter {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn execute(
     eval_set_path: PathBuf,
     models_str: Option<String>,
@@ -210,7 +211,14 @@ fn print_summary(report: &forgetest_core::report::EvalReport) {
     use comfy_table::{Cell, Table};
 
     let mut table = Table::new();
-    table.set_header(vec!["Model", "Pass@1", "Compile %", "Test Pass %", "Cost", "Latency"]);
+    table.set_header(vec![
+        "Model",
+        "Pass@1",
+        "Compile %",
+        "Test Pass %",
+        "Cost",
+        "Latency",
+    ]);
 
     for (model, stats) in &report.aggregate.per_model {
         let pass_1 = stats.pass_at_k.get(&1).copied().unwrap_or(0.0);

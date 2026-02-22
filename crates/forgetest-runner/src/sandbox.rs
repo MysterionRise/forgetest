@@ -25,11 +25,7 @@ pub struct Sandbox {
 
 impl Sandbox {
     /// Create a new sandbox with a fresh Cargo project.
-    pub fn new(
-        language: Language,
-        timeout: Duration,
-        shared_target_dir: &Path,
-    ) -> Result<Self> {
+    pub fn new(language: Language, timeout: Duration, shared_target_dir: &Path) -> Result<Self> {
         let work_dir = TempDir::new().context("failed to create temp directory")?;
 
         // Create a basic Cargo project
@@ -140,12 +136,10 @@ edition = "2021"
     ///
     /// Sets CARGO_TARGET_DIR and restricts access to sensitive env vars.
     pub fn build_env(&self) -> Vec<(String, String)> {
-        let mut env = vec![
-            (
-                "CARGO_TARGET_DIR".to_string(),
-                self.shared_target_dir.to_string_lossy().to_string(),
-            ),
-        ];
+        let mut env = vec![(
+            "CARGO_TARGET_DIR".to_string(),
+            self.shared_target_dir.to_string_lossy().to_string(),
+        )];
 
         // Clear sensitive env vars to prevent leakage into sandboxed code
         for var in &[
@@ -180,8 +174,7 @@ mod tests {
     #[test]
     fn sandbox_creates_valid_cargo_project() {
         let target = tempfile::tempdir().unwrap();
-        let sandbox =
-            Sandbox::new(Language::Rust, Duration::from_secs(60), target.path()).unwrap();
+        let sandbox = Sandbox::new(Language::Rust, Duration::from_secs(60), target.path()).unwrap();
 
         assert!(sandbox.work_dir().join("Cargo.toml").exists());
         assert!(sandbox.work_dir().join("src").join("lib.rs").exists());
@@ -190,8 +183,7 @@ mod tests {
     #[test]
     fn write_source_lib() {
         let target = tempfile::tempdir().unwrap();
-        let sandbox =
-            Sandbox::new(Language::Rust, Duration::from_secs(60), target.path()).unwrap();
+        let sandbox = Sandbox::new(Language::Rust, Duration::from_secs(60), target.path()).unwrap();
 
         sandbox.write_source("pub fn hello() {}").unwrap();
         let content = std::fs::read_to_string(sandbox.work_dir().join("src/lib.rs")).unwrap();
@@ -201,18 +193,18 @@ mod tests {
     #[test]
     fn write_source_main() {
         let target = tempfile::tempdir().unwrap();
-        let sandbox =
-            Sandbox::new(Language::Rust, Duration::from_secs(60), target.path()).unwrap();
+        let sandbox = Sandbox::new(Language::Rust, Duration::from_secs(60), target.path()).unwrap();
 
-        sandbox.write_source("fn main() { println!(\"hi\"); }").unwrap();
+        sandbox
+            .write_source("fn main() { println!(\"hi\"); }")
+            .unwrap();
         assert!(sandbox.work_dir().join("src/main.rs").exists());
     }
 
     #[test]
     fn add_dependency() {
         let target = tempfile::tempdir().unwrap();
-        let sandbox =
-            Sandbox::new(Language::Rust, Duration::from_secs(60), target.path()).unwrap();
+        let sandbox = Sandbox::new(Language::Rust, Duration::from_secs(60), target.path()).unwrap();
 
         sandbox
             .add_dependency(&Dependency {
@@ -222,19 +214,21 @@ mod tests {
             })
             .unwrap();
 
-        let content =
-            std::fs::read_to_string(sandbox.work_dir().join("Cargo.toml")).unwrap();
+        let content = std::fs::read_to_string(sandbox.work_dir().join("Cargo.toml")).unwrap();
         assert!(content.contains("serde"));
     }
 
     #[test]
     fn write_test_appends() {
         let target = tempfile::tempdir().unwrap();
-        let sandbox =
-            Sandbox::new(Language::Rust, Duration::from_secs(60), target.path()).unwrap();
+        let sandbox = Sandbox::new(Language::Rust, Duration::from_secs(60), target.path()).unwrap();
 
-        sandbox.write_source("pub fn add(a: i32, b: i32) -> i32 { a + b }").unwrap();
-        sandbox.write_test("#[test] fn test_add() { assert_eq!(add(1, 2), 3); }").unwrap();
+        sandbox
+            .write_source("pub fn add(a: i32, b: i32) -> i32 { a + b }")
+            .unwrap();
+        sandbox
+            .write_test("#[test] fn test_add() { assert_eq!(add(1, 2), 3); }")
+            .unwrap();
 
         let content = std::fs::read_to_string(sandbox.work_dir().join("src/lib.rs")).unwrap();
         assert!(content.contains("pub fn add"));

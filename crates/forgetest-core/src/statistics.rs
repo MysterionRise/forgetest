@@ -163,11 +163,8 @@ pub fn compute_aggregate_stats(
     let mut per_model = HashMap::new();
     for (model, model_res) in &model_results {
         let n = model_res.len() as f64;
-        let compilation_rate = model_res
-            .iter()
-            .filter(|r| r.compilation.success)
-            .count() as f64
-            / n;
+        let compilation_rate =
+            model_res.iter().filter(|r| r.compilation.success).count() as f64 / n;
 
         let test_pass_rate = model_res
             .iter()
@@ -212,10 +209,7 @@ pub fn compute_aggregate_stats(
             .map(|r| r.token_usage.estimated_cost_usd)
             .sum();
 
-        let avg_latency = model_res
-            .iter()
-            .map(|r| r.timing.total_ms)
-            .sum::<u64>()
+        let avg_latency = model_res.iter().map(|r| r.timing.total_ms).sum::<u64>()
             / model_res.len().max(1) as u64;
 
         // Aggregate Pass@k for this model
@@ -317,7 +311,10 @@ mod tests {
     fn pass_at_k_10_with_1_success() {
         // With 10 samples and 1 correct, Pass@10 should be 1.0
         let score = pass_at_k(10, 1, 10);
-        assert!((score - 1.0).abs() < f64::EPSILON, "expected 1.0, got {score}");
+        assert!(
+            (score - 1.0).abs() < f64::EPSILON,
+            "expected 1.0, got {score}"
+        );
     }
 
     #[test]

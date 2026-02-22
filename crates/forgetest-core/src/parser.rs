@@ -269,7 +269,10 @@ expected_functions = ["fibonacci"]
         assert_eq!(set.cases.len(), 1);
         assert_eq!(set.cases[0].id, "fibonacci");
         assert!(set.cases[0].expectations.test_file.is_some());
-        assert_eq!(set.cases[0].expectations.expected_functions, vec!["fibonacci"]);
+        assert_eq!(
+            set.cases[0].expectations.expected_functions,
+            vec!["fibonacci"]
+        );
     }
 
     #[test]
@@ -330,9 +333,7 @@ should_pass_tests = true
 "#;
         let set = parse_eval_set_str(toml, &PathBuf::from("test.toml")).unwrap();
         let warnings = validate_eval_set(&set);
-        assert!(warnings
-            .iter()
-            .any(|w| w.message.contains("no test_file")));
+        assert!(warnings.iter().any(|w| w.message.contains("no test_file")));
     }
 
     #[test]

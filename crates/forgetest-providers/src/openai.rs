@@ -100,7 +100,10 @@ impl LlmProvider for OpenAiProvider {
 
         let mut full_prompt = String::new();
         for file in &request.context_files {
-            full_prompt.push_str(&format!("File `{}`:\n```\n{}\n```\n\n", file.path, file.content));
+            full_prompt.push_str(&format!(
+                "File `{}`:\n```\n{}\n```\n\n",
+                file.path, file.content
+            ));
         }
         full_prompt.push_str(&request.prompt);
 
@@ -165,12 +168,11 @@ impl LlmProvider for OpenAiProvider {
             .into());
         }
 
-        let api_response: OpenAiResponse = response.json().await.map_err(|e| {
-            ProviderError::ApiError {
+        let api_response: OpenAiResponse =
+            response.json().await.map_err(|e| ProviderError::ApiError {
                 status: 0,
                 message: format!("failed to parse response: {e}"),
-            }
-        })?;
+            })?;
 
         let latency_ms = start.elapsed().as_millis() as u64;
         let content = api_response

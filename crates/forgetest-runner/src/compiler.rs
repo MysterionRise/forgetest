@@ -6,7 +6,9 @@ use std::time::Instant;
 use anyhow::{Context, Result};
 use tokio::process::Command;
 
-use forgetest_core::results::{CompilationResult, CompilerDiagnostic, DiagnosticLevel, DiagnosticSpan};
+use forgetest_core::results::{
+    CompilationResult, CompilerDiagnostic, DiagnosticLevel, DiagnosticSpan,
+};
 
 use crate::sandbox::Sandbox;
 

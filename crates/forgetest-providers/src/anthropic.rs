@@ -104,7 +104,10 @@ impl LlmProvider for AnthropicProvider {
         // Build context into the prompt
         let mut full_prompt = String::new();
         for file in &request.context_files {
-            full_prompt.push_str(&format!("File `{}`:\n```\n{}\n```\n\n", file.path, file.content));
+            full_prompt.push_str(&format!(
+                "File `{}`:\n```\n{}\n```\n\n",
+                file.path, file.content
+            ));
         }
         full_prompt.push_str(&request.prompt);
 
@@ -165,12 +168,11 @@ impl LlmProvider for AnthropicProvider {
             return Err(ProviderError::ApiError { status, message }.into());
         }
 
-        let api_response: AnthropicResponse = response.json().await.map_err(|e| {
-            ProviderError::ApiError {
+        let api_response: AnthropicResponse =
+            response.json().await.map_err(|e| ProviderError::ApiError {
                 status: 0,
                 message: format!("failed to parse response: {e}"),
-            }
-        })?;
+            })?;
 
         let latency_ms = start.elapsed().as_millis() as u64;
         let content = api_response
@@ -293,9 +295,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/v1/messages"))
-            .respond_with(
-                ResponseTemplate::new(429).insert_header("retry-after", "5"),
-            )
+            .respond_with(ResponseTemplate::new(429).insert_header("retry-after", "5"))
             .mount(&server)
             .await;
 

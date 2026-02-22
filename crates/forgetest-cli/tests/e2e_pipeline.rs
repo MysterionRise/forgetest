@@ -12,7 +12,8 @@ use uuid::Uuid;
 
 fn make_runner() -> (tempfile::TempDir, LocalRunner) {
     let target = tempfile::tempdir().unwrap();
-    let runner = LocalRunner::new(target.path().to_path_buf()).with_timeout(Duration::from_secs(120));
+    let runner =
+        LocalRunner::new(target.path().to_path_buf()).with_timeout(Duration::from_secs(120));
     (target, runner)
 }
 
@@ -80,17 +81,34 @@ pub fn fibonacci(n: u64) -> u64 {
 }
 "#;
 
-    let result = run_eval(&runner, &case, code, "mock", "mock", zero_usage(), 0, 1, Uuid::nil())
-        .await
-        .unwrap();
+    let result = run_eval(
+        &runner,
+        &case,
+        code,
+        "mock",
+        "mock",
+        zero_usage(),
+        0,
+        1,
+        Uuid::nil(),
+    )
+    .await
+    .unwrap();
 
     assert!(result.compilation.success, "should compile");
-    let tests = result.test_execution.as_ref().expect("should have test results");
+    let tests = result
+        .test_execution
+        .as_ref()
+        .expect("should have test results");
     assert!(tests.passed >= 1, "should have passing tests");
     assert_eq!(tests.failed, 0, "should have no failures");
 
     let score = Score::compute(&result, &case.expectations);
-    assert!(score.overall > 0.8, "score should be > 0.8, got {}", score.overall);
+    assert!(
+        score.overall > 0.8,
+        "score should be > 0.8, got {}",
+        score.overall
+    );
 }
 
 #[tokio::test]
@@ -114,9 +132,19 @@ mod tests {
 
     let code = "pub fn add(a: i32, b: i32) -> i32 { a + b }";
 
-    let result = run_eval(&runner, &case, code, "mock", "mock", zero_usage(), 0, 1, Uuid::nil())
-        .await
-        .unwrap();
+    let result = run_eval(
+        &runner,
+        &case,
+        code,
+        "mock",
+        "mock",
+        zero_usage(),
+        0,
+        1,
+        Uuid::nil(),
+    )
+    .await
+    .unwrap();
 
     assert!(result.compilation.success);
     let tests = result.test_execution.as_ref().unwrap();
@@ -144,9 +172,19 @@ mod tests {
     // Missing semicolon
     let code = "pub fn add(a: i32, b: i32) -> i32 { a + b";
 
-    let result = run_eval(&runner, &case, code, "mock", "mock", zero_usage(), 0, 1, Uuid::nil())
-        .await
-        .unwrap();
+    let result = run_eval(
+        &runner,
+        &case,
+        code,
+        "mock",
+        "mock",
+        zero_usage(),
+        0,
+        1,
+        Uuid::nil(),
+    )
+    .await
+    .unwrap();
 
     assert!(!result.compilation.success, "should fail to compile");
     assert!(result.test_execution.is_none(), "no tests should run");
@@ -173,15 +211,29 @@ mod tests {
     // Returns String instead of i32
     let code = r#"pub fn double(n: i32) -> String { format!("{}", n * 2) }"#;
 
-    let result = run_eval(&runner, &case, code, "mock", "mock", zero_usage(), 0, 1, Uuid::nil())
-        .await
-        .unwrap();
+    let result = run_eval(
+        &runner,
+        &case,
+        code,
+        "mock",
+        "mock",
+        zero_usage(),
+        0,
+        1,
+        Uuid::nil(),
+    )
+    .await
+    .unwrap();
 
     // Code itself compiles, but tests fail to compile due to type mismatch in assert_eq.
     // Score = 0.4 (compile) + 0.0 (tests) + 0.1 (clippy) = 0.5
     assert!(result.compilation.success, "source alone should compile");
     let score = Score::compute(&result, &case.expectations);
-    assert!(score.overall <= 0.5, "wrong return type should score <= 0.5, got {}", score.overall);
+    assert!(
+        score.overall <= 0.5,
+        "wrong return type should score <= 0.5, got {}",
+        score.overall
+    );
 }
 
 #[tokio::test]
@@ -204,12 +256,25 @@ mod tests {
     // Bug: subtracts instead of adds
     let code = "pub fn add(a: i32, b: i32) -> i32 { a - b }";
 
-    let result = run_eval(&runner, &case, code, "mock", "mock", zero_usage(), 0, 1, Uuid::nil())
-        .await
-        .unwrap();
+    let result = run_eval(
+        &runner,
+        &case,
+        code,
+        "mock",
+        "mock",
+        zero_usage(),
+        0,
+        1,
+        Uuid::nil(),
+    )
+    .await
+    .unwrap();
 
     assert!(result.compilation.success, "should compile");
-    let tests = result.test_execution.as_ref().expect("should have test results");
+    let tests = result
+        .test_execution
+        .as_ref()
+        .expect("should have test results");
     assert!(tests.failed >= 1, "should have failing tests");
 
     let score = Score::compute(&result, &case.expectations);
@@ -239,13 +304,27 @@ mod tests {
     // because the referenced function doesn't exist.
     let code = "";
 
-    let result = run_eval(&runner, &case, code, "mock", "mock", zero_usage(), 0, 1, Uuid::nil())
-        .await
-        .unwrap();
+    let result = run_eval(
+        &runner,
+        &case,
+        code,
+        "mock",
+        "mock",
+        zero_usage(),
+        0,
+        1,
+        Uuid::nil(),
+    )
+    .await
+    .unwrap();
 
     // Empty lib.rs compiles fine; tests fail; clippy passes
     // Score = 0.4 (compile) + 0.0 (tests) + 0.1 (clippy) = 0.5
     assert!(result.compilation.success, "empty lib.rs should compile");
     let score = Score::compute(&result, &case.expectations);
-    assert!(score.overall <= 0.5, "empty code should score low, got {}", score.overall);
+    assert!(
+        score.overall <= 0.5,
+        "empty code should score low, got {}",
+        score.overall
+    );
 }

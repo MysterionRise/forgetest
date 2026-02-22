@@ -241,10 +241,7 @@ fn add(a: i32, b: i32) -> i32 {
 
 That's it!"#;
         let code = extract_code_from_markdown(input);
-        assert_eq!(
-            code,
-            "fn add(a: i32, b: i32) -> i32 {\n    a + b\n}"
-        );
+        assert_eq!(code, "fn add(a: i32, b: i32) -> i32 {\n    a + b\n}");
     }
 
     #[test]

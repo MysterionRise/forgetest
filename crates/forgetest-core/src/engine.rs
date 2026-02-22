@@ -134,57 +134,83 @@ impl EvalEngine {
                         let ctx_case_id = case.id.clone();
                         let ctx_model = model.clone();
                         let inner = async move {
-                        let _permit = semaphore.clone().acquire_owned().await
-                            .map_err(|_| anyhow::anyhow!("semaphore closed"))?;
+                            let _permit = semaphore
+                                .clone()
+                                .acquire_owned()
+                                .await
+                                .map_err(|_| anyhow::anyhow!("semaphore closed"))?;
 
-                        let request = GenerateRequest {
-                            model: model.clone(),
-                            prompt: case.prompt.clone(),
-                            system_prompt: config.system_prompt_override.clone(),
-                            context_files: case.context.clone(),
-                            max_tokens: case.max_tokens.unwrap_or(config.max_tokens),
-                            temperature: config.temperature,
-                            stop_sequences: vec![],
-                        };
+                            let request = GenerateRequest {
+                                model: model.clone(),
+                                prompt: case.prompt.clone(),
+                                system_prompt: config.system_prompt_override.clone(),
+                                context_files: case.context.clone(),
+                                max_tokens: case.max_tokens.unwrap_or(config.max_tokens),
+                                temperature: config.temperature,
+                                stop_sequences: vec![],
+                            };
 
-                        let gen_start = Instant::now();
+                            let gen_start = Instant::now();
 
-                        // Retry on transient provider errors with exponential backoff
-                        let mut last_error = None;
-                        let mut retry_delay = config.retry_delay;
-                        for retry in 0..=config.max_retries_per_case {
-                            if retry > 0 {
-                                tokio::time::sleep(retry_delay).await;
-                                retry_delay = (retry_delay * 2).min(Duration::from_secs(60));
-                            }
-                            match provider.generate(&request).await {
-                                Ok(response) => {
-                                    let llm_ms = gen_start.elapsed().as_millis() as u64;
-                                    let generated_code = response.extracted_code.clone();
-                                    let language = case.language.unwrap_or(Language::Rust);
-                                    let timeout_secs = case.timeout_secs.unwrap_or(60);
+                            // Retry on transient provider errors with exponential backoff
+                            let mut last_error = None;
+                            let mut retry_delay = config.retry_delay;
+                            for retry in 0..=config.max_retries_per_case {
+                                if retry > 0 {
+                                    tokio::time::sleep(retry_delay).await;
+                                    retry_delay = (retry_delay * 2).min(Duration::from_secs(60));
+                                }
+                                match provider.generate(&request).await {
+                                    Ok(response) => {
+                                        let llm_ms = gen_start.elapsed().as_millis() as u64;
+                                        let generated_code = response.extracted_code.clone();
+                                        let language = case.language.unwrap_or(Language::Rust);
+                                        let timeout_secs = case.timeout_secs.unwrap_or(60);
 
-                                    // Compile the generated code
-                                    let compile_result = runner
-                                        .compile(&CompileRequest {
-                                            code: generated_code.clone(),
-                                            language,
-                                            dependencies: vec![],
-                                            timeout_secs,
-                                        })
-                                        .await?;
-                                    let compilation_ms = compile_result.duration_ms;
+                                        // Compile the generated code
+                                        let compile_result = runner
+                                            .compile(&CompileRequest {
+                                                code: generated_code.clone(),
+                                                language,
+                                                dependencies: vec![],
+                                                timeout_secs,
+                                            })
+                                            .await?;
+                                        let compilation_ms = compile_result.duration_ms;
 
-                                    // Run tests if compilation succeeded and test_file is provided
-                                    let test_execution = if compile_result.success
-                                        && case.expectations.should_pass_tests
-                                    {
-                                        if let Some(test_file) = &case.expectations.test_file {
+                                        // Run tests if compilation succeeded and test_file is provided
+                                        let test_execution = if compile_result.success
+                                            && case.expectations.should_pass_tests
+                                        {
+                                            if let Some(test_file) = &case.expectations.test_file {
+                                                Some(
+                                                    runner
+                                                        .run_tests(&TestRequest {
+                                                            code: generated_code.clone(),
+                                                            test_code: test_file.clone(),
+                                                            language,
+                                                            dependencies: vec![],
+                                                            timeout_secs,
+                                                        })
+                                                        .await?,
+                                                )
+                                            } else {
+                                                None
+                                            }
+                                        } else {
+                                            None
+                                        };
+                                        let test_execution_ms = test_execution
+                                            .as_ref()
+                                            .map(|t| t.duration_ms)
+                                            .unwrap_or(0);
+
+                                        // Run clippy if compilation succeeded
+                                        let clippy = if compile_result.success {
                                             Some(
                                                 runner
-                                                    .run_tests(&TestRequest {
+                                                    .run_clippy(&ClippyRequest {
                                                         code: generated_code.clone(),
-                                                        test_code: test_file.clone(),
                                                         language,
                                                         dependencies: vec![],
                                                         timeout_secs,
@@ -193,73 +219,49 @@ impl EvalEngine {
                                             )
                                         } else {
                                             None
-                                        }
-                                    } else {
-                                        None
-                                    };
-                                    let test_execution_ms = test_execution
-                                        .as_ref()
-                                        .map(|t| t.duration_ms)
-                                        .unwrap_or(0);
+                                        };
 
-                                    // Run clippy if compilation succeeded
-                                    let clippy = if compile_result.success {
-                                        Some(
-                                            runner
-                                                .run_clippy(&ClippyRequest {
-                                                    code: generated_code.clone(),
-                                                    language,
-                                                    dependencies: vec![],
-                                                    timeout_secs,
-                                                })
-                                                .await?,
-                                        )
-                                    } else {
-                                        None
-                                    };
+                                        let total_ms = llm_ms + compilation_ms + test_execution_ms;
 
-                                    let total_ms =
-                                        llm_ms + compilation_ms + test_execution_ms;
-
-                                    return Ok(EvalResult {
-                                        case_id: case.id.clone(),
-                                        model: model.clone(),
-                                        provider: provider_name.clone(),
-                                        generated_code,
-                                        compilation: compile_result,
-                                        test_execution,
-                                        clippy,
-                                        timing: TimingInfo {
-                                            llm_request_ms: llm_ms,
-                                            compilation_ms,
-                                            test_execution_ms,
-                                            total_ms,
-                                        },
-                                        token_usage: response.token_usage,
-                                        attempt,
-                                        run_id,
-                                    });
-                                }
-                                Err(e) => {
-                                    // Check if the error is permanent (should not retry)
-                                    let err_str = e.to_string();
-                                    if err_str.contains("authentication")
-                                        || err_str.contains("model not found")
-                                    {
-                                        return Err(e);
+                                        return Ok(EvalResult {
+                                            case_id: case.id.clone(),
+                                            model: model.clone(),
+                                            provider: provider_name.clone(),
+                                            generated_code,
+                                            compilation: compile_result,
+                                            test_execution,
+                                            clippy,
+                                            timing: TimingInfo {
+                                                llm_request_ms: llm_ms,
+                                                compilation_ms,
+                                                test_execution_ms,
+                                                total_ms,
+                                            },
+                                            token_usage: response.token_usage,
+                                            attempt,
+                                            run_id,
+                                        });
                                     }
-                                    // Use provider's retry-after hint if available
-                                    if err_str.contains("rate limited") {
-                                        if let Some(ms) = parse_retry_after_ms(&err_str) {
-                                            retry_delay = Duration::from_millis(ms);
+                                    Err(e) => {
+                                        // Check if the error is permanent (should not retry)
+                                        let err_str = e.to_string();
+                                        if err_str.contains("authentication")
+                                            || err_str.contains("model not found")
+                                        {
+                                            return Err(e);
                                         }
+                                        // Use provider's retry-after hint if available
+                                        if err_str.contains("rate limited") {
+                                            if let Some(ms) = parse_retry_after_ms(&err_str) {
+                                                retry_delay = Duration::from_millis(ms);
+                                            }
+                                        }
+                                        last_error = Some(e);
                                     }
-                                    last_error = Some(e);
                                 }
                             }
-                        }
 
-                        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("unknown error")))
+                            Err(last_error.unwrap_or_else(|| anyhow::anyhow!("unknown error")))
                         };
                         (ctx_case_id, ctx_model, inner.await)
                     });

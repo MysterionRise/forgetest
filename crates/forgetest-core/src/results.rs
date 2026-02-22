@@ -180,11 +180,7 @@ impl Score {
     /// - Clippy: 1.0 - 0.1 per warning, capped at 0.0
     /// - Overall: weighted average (compilation 40%, tests 50%, clippy 10%)
     pub fn compute(result: &EvalResult, expectations: &Expectations) -> Score {
-        let compilation = if result.compilation.success {
-            1.0
-        } else {
-            0.0
-        };
+        let compilation = if result.compilation.success { 1.0 } else { 0.0 };
 
         let tests = if expectations.should_pass_tests {
             match &result.test_execution {
@@ -203,9 +199,7 @@ impl Score {
         };
 
         let clippy = match &result.clippy {
-            Some(clippy_result) => {
-                (1.0 - clippy_result.warning_count as f64 * 0.1).max(0.0)
-            }
+            Some(clippy_result) => (1.0 - clippy_result.warning_count as f64 * 0.1).max(0.0),
             None => 1.0,
         };
 

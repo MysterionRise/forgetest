@@ -16,9 +16,17 @@ pub fn generate_sarif(report: &EvalReport) -> serde_json::Value {
 
     // Define rules
     let rule_defs = vec![
-        ("compilation-failure", "Compilation Failure", "The generated code failed to compile"),
+        (
+            "compilation-failure",
+            "Compilation Failure",
+            "The generated code failed to compile",
+        ),
         ("test-failure", "Test Failure", "One or more tests failed"),
-        ("clippy-warning", "Clippy Warning", "Clippy reported a warning"),
+        (
+            "clippy-warning",
+            "Clippy Warning",
+            "Clippy reported a warning",
+        ),
     ];
 
     for (id, name, desc) in &rule_defs {

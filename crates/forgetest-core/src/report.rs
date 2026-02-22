@@ -251,7 +251,13 @@ mod tests {
         }
     }
 
-    fn make_eval_result(case_id: &str, model: &str, compile_ok: bool, tests_pass: u32, tests_fail: u32) -> EvalResult {
+    fn make_eval_result(
+        case_id: &str,
+        model: &str,
+        compile_ok: bool,
+        tests_pass: u32,
+        tests_fail: u32,
+    ) -> EvalResult {
         EvalResult {
             case_id: case_id.into(),
             model: model.into(),

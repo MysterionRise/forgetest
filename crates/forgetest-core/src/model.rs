@@ -165,7 +165,10 @@ mod tests {
         assert_eq!(Language::Rust.to_string(), "rust");
         assert_eq!(Language::Python.to_string(), "python");
         assert_eq!("rust".parse::<Language>().unwrap(), Language::Rust);
-        assert_eq!("TypeScript".parse::<Language>().unwrap(), Language::TypeScript);
+        assert_eq!(
+            "TypeScript".parse::<Language>().unwrap(),
+            Language::TypeScript
+        );
         assert_eq!("ts".parse::<Language>().unwrap(), Language::TypeScript);
         assert_eq!("golang".parse::<Language>().unwrap(), Language::Go);
         assert!("java".parse::<Language>().is_err());
