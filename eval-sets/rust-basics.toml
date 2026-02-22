@@ -1,0 +1,709 @@
+[eval_set]
+id = "rust-basics"
+name = "Rust Basics"
+description = "Fundamental Rust coding tasks"
+default_language = "rust"
+default_timeout_secs = 60
+
+# --- 1. Fibonacci ---
+
+[[cases]]
+id = "fibonacci"
+name = "Fibonacci function"
+description = "Write an iterative function that returns the nth Fibonacci number"
+prompt = """
+Write a Rust function `fn fibonacci(n: u64) -> u64` that returns the nth Fibonacci number.
+Use an iterative approach for efficiency. fibonacci(0) = 0, fibonacci(1) = 1.
+"""
+tags = ["algorithms", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_base_cases() {
+        assert_eq!(fibonacci(0), 0);
+        assert_eq!(fibonacci(1), 1);
+    }
+    #[test]
+    fn test_sequence() {
+        assert_eq!(fibonacci(10), 55);
+        assert_eq!(fibonacci(20), 6765);
+    }
+    #[test]
+    fn test_larger() {
+        assert_eq!(fibonacci(30), 832040);
+    }
+}
+"""
+expected_functions = ["fibonacci"]
+
+# --- 2. Is Palindrome ---
+
+[[cases]]
+id = "is_palindrome"
+name = "Palindrome check"
+description = "Check if a string is a palindrome"
+prompt = """
+Write a Rust function `fn is_palindrome(s: &str) -> bool` that checks if a string
+is a palindrome. It should be case-insensitive and ignore non-alphanumeric characters.
+For example, "A man, a plan, a canal: Panama" is a palindrome.
+"""
+tags = ["strings", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_simple_palindrome() {
+        assert!(is_palindrome("racecar"));
+        assert!(is_palindrome("madam"));
+    }
+    #[test]
+    fn test_not_palindrome() {
+        assert!(!is_palindrome("hello"));
+    }
+    #[test]
+    fn test_with_spaces_and_punctuation() {
+        assert!(is_palindrome("A man, a plan, a canal: Panama"));
+    }
+    #[test]
+    fn test_empty_and_single() {
+        assert!(is_palindrome(""));
+        assert!(is_palindrome("a"));
+    }
+}
+"""
+expected_functions = ["is_palindrome"]
+
+# --- 3. Binary Search ---
+
+[[cases]]
+id = "binary_search"
+name = "Binary search"
+description = "Implement binary search returning Option<usize>"
+prompt = """
+Write a Rust function `fn binary_search<T: Ord>(arr: &[T], target: &T) -> Option<usize>`
+that performs binary search on a sorted slice and returns the index of the target
+if found, or None if not found.
+"""
+tags = ["algorithms", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_found() {
+        let arr = vec![1, 3, 5, 7, 9, 11];
+        assert_eq!(binary_search(&arr, &5), Some(2));
+        assert_eq!(binary_search(&arr, &1), Some(0));
+        assert_eq!(binary_search(&arr, &11), Some(5));
+    }
+    #[test]
+    fn test_not_found() {
+        let arr = vec![1, 3, 5, 7, 9];
+        assert_eq!(binary_search(&arr, &4), None);
+    }
+    #[test]
+    fn test_empty() {
+        let arr: Vec<i32> = vec![];
+        assert_eq!(binary_search(&arr, &1), None);
+    }
+    #[test]
+    fn test_single_element() {
+        assert_eq!(binary_search(&[42], &42), Some(0));
+        assert_eq!(binary_search(&[42], &43), None);
+    }
+}
+"""
+expected_functions = ["binary_search"]
+
+# --- 4. Flatten ---
+
+[[cases]]
+id = "flatten"
+name = "Flatten nested vectors"
+description = "Flatten Vec<Vec<T>> into Vec<T>"
+prompt = """
+Write a Rust function `fn flatten<T>(nested: Vec<Vec<T>>) -> Vec<T>` that flattens
+a vector of vectors into a single vector.
+"""
+tags = ["data-structures", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_basic_flatten() {
+        let input = vec![vec![1, 2], vec![3, 4], vec![5]];
+        assert_eq!(flatten(input), vec![1, 2, 3, 4, 5]);
+    }
+    #[test]
+    fn test_empty_inner() {
+        let input: Vec<Vec<i32>> = vec![vec![], vec![1], vec![]];
+        assert_eq!(flatten(input), vec![1]);
+    }
+    #[test]
+    fn test_all_empty() {
+        let input: Vec<Vec<i32>> = vec![vec![], vec![]];
+        assert_eq!(flatten(input), Vec::<i32>::new());
+    }
+    #[test]
+    fn test_strings() {
+        let input = vec![vec!["a".to_string()], vec!["b".to_string(), "c".to_string()]];
+        assert_eq!(flatten(input), vec!["a", "b", "c"]);
+    }
+}
+"""
+expected_functions = ["flatten"]
+
+# --- 5. Word Count ---
+
+[[cases]]
+id = "word_count"
+name = "Word frequency count"
+description = "Count word frequencies in a string"
+prompt = """
+Write a Rust function `fn word_count(text: &str) -> std::collections::HashMap<String, usize>`
+that counts the frequency of each word in the given text. Words should be lowercased
+and split on whitespace. Ignore punctuation attached to words.
+"""
+tags = ["strings", "data-structures", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    #[test]
+    fn test_basic() {
+        let counts = word_count("hello world hello");
+        assert_eq!(counts.get("hello"), Some(&2));
+        assert_eq!(counts.get("world"), Some(&1));
+    }
+    #[test]
+    fn test_empty() {
+        let counts = word_count("");
+        assert!(counts.is_empty());
+    }
+    #[test]
+    fn test_case_insensitive() {
+        let counts = word_count("Hello hello HELLO");
+        assert_eq!(counts.get("hello"), Some(&3));
+    }
+}
+"""
+expected_functions = ["word_count"]
+
+# --- 6. Roman Numerals ---
+
+[[cases]]
+id = "roman_numerals"
+name = "Integer to Roman numerals"
+description = "Convert an integer to a Roman numeral string"
+prompt = """
+Write a Rust function `fn to_roman(num: u32) -> String` that converts an integer (1-3999)
+to its Roman numeral representation. Use the standard subtractive notation
+(e.g., 4 = "IV", 9 = "IX", 40 = "XL", 90 = "XC", 400 = "CD", 900 = "CM").
+"""
+tags = ["strings", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_simple() {
+        assert_eq!(to_roman(1), "I");
+        assert_eq!(to_roman(3), "III");
+        assert_eq!(to_roman(5), "V");
+        assert_eq!(to_roman(10), "X");
+    }
+    #[test]
+    fn test_subtractive() {
+        assert_eq!(to_roman(4), "IV");
+        assert_eq!(to_roman(9), "IX");
+        assert_eq!(to_roman(40), "XL");
+        assert_eq!(to_roman(90), "XC");
+        assert_eq!(to_roman(400), "CD");
+        assert_eq!(to_roman(900), "CM");
+    }
+    #[test]
+    fn test_complex() {
+        assert_eq!(to_roman(1994), "MCMXCIV");
+        assert_eq!(to_roman(3999), "MMMCMXCIX");
+        assert_eq!(to_roman(58), "LVIII");
+    }
+}
+"""
+expected_functions = ["to_roman"]
+
+# --- 7. Matrix Transpose ---
+
+[[cases]]
+id = "matrix_transpose"
+name = "Matrix transpose"
+description = "Transpose a 2D vector (matrix)"
+prompt = """
+Write a Rust function `fn transpose(matrix: Vec<Vec<i32>>) -> Vec<Vec<i32>>` that
+transposes a 2D matrix represented as a vector of vectors. Rows become columns and
+columns become rows. For example, [[1,2,3],[4,5,6]] becomes [[1,4],[2,5],[3,6]].
+If the input is empty, return an empty vector.
+"""
+tags = ["data-structures", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_square() {
+        let m = vec![vec![1, 2], vec![3, 4]];
+        assert_eq!(transpose(m), vec![vec![1, 3], vec![2, 4]]);
+    }
+    #[test]
+    fn test_rectangular() {
+        let m = vec![vec![1, 2, 3], vec![4, 5, 6]];
+        assert_eq!(transpose(m), vec![vec![1, 4], vec![2, 5], vec![3, 6]]);
+    }
+    #[test]
+    fn test_single_row() {
+        let m = vec![vec![1, 2, 3]];
+        assert_eq!(transpose(m), vec![vec![1], vec![2], vec![3]]);
+    }
+    #[test]
+    fn test_empty() {
+        let m: Vec<Vec<i32>> = vec![];
+        assert_eq!(transpose(m), Vec::<Vec<i32>>::new());
+    }
+}
+"""
+expected_functions = ["transpose"]
+
+# --- 8. Merge Sorted ---
+
+[[cases]]
+id = "merge_sorted"
+name = "Merge two sorted arrays"
+description = "Merge two sorted Vecs into one sorted Vec"
+prompt = """
+Write a Rust function `fn merge_sorted(a: &[i32], b: &[i32]) -> Vec<i32>` that
+merges two sorted slices into a single sorted vector. Use the merge step of merge sort
+(two-pointer technique), not sorting the concatenated result. Both input slices are
+already sorted in ascending order.
+"""
+tags = ["algorithms", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_basic_merge() {
+        assert_eq!(merge_sorted(&[1, 3, 5], &[2, 4, 6]), vec![1, 2, 3, 4, 5, 6]);
+    }
+    #[test]
+    fn test_with_duplicates() {
+        assert_eq!(merge_sorted(&[1, 2, 3], &[2, 3, 4]), vec![1, 2, 2, 3, 3, 4]);
+    }
+    #[test]
+    fn test_empty_inputs() {
+        assert_eq!(merge_sorted(&[], &[1, 2, 3]), vec![1, 2, 3]);
+        assert_eq!(merge_sorted(&[1, 2, 3], &[]), vec![1, 2, 3]);
+        assert_eq!(merge_sorted(&[], &[]), Vec::<i32>::new());
+    }
+    #[test]
+    fn test_non_overlapping() {
+        assert_eq!(merge_sorted(&[1, 2, 3], &[10, 20, 30]), vec![1, 2, 3, 10, 20, 30]);
+    }
+}
+"""
+expected_functions = ["merge_sorted"]
+
+# --- 9. Balanced Brackets ---
+
+[[cases]]
+id = "brackets_balanced"
+name = "Balanced brackets"
+description = "Check if brackets, parens, and braces are balanced"
+prompt = """
+Write a Rust function `fn is_balanced(s: &str) -> bool` that checks if all brackets,
+parentheses, and braces in the string are properly balanced and nested.
+Only consider the characters '(', ')', '[', ']', '{', '}'. All other characters
+should be ignored. For example, "{[()]}" is balanced, "{[(])}" is not.
+"""
+tags = ["strings", "data-structures", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_balanced() {
+        assert!(is_balanced("()"));
+        assert!(is_balanced("()[]{}"));
+        assert!(is_balanced("{[()]}"));
+        assert!(is_balanced(""));
+    }
+    #[test]
+    fn test_unbalanced() {
+        assert!(!is_balanced("(]"));
+        assert!(!is_balanced("([)]"));
+        assert!(!is_balanced("{"));
+        assert!(!is_balanced("}"));
+    }
+    #[test]
+    fn test_with_other_chars() {
+        assert!(is_balanced("hello (world) [foo] {bar}"));
+        assert!(!is_balanced("hello (world] foo"));
+    }
+    #[test]
+    fn test_nested_deep() {
+        assert!(is_balanced("((((((()))))))"));
+        assert!(!is_balanced("((((((())))"));
+    }
+}
+"""
+expected_functions = ["is_balanced"]
+
+# --- 10. Run-Length Encoding ---
+
+[[cases]]
+id = "run_length_encoding"
+name = "Run-length encoding"
+description = "Encode a string with run-length encoding"
+prompt = """
+Write two Rust functions:
+- `fn rle_encode(s: &str) -> String` — encodes the string using run-length encoding.
+  Consecutive identical characters are replaced by the count followed by the character.
+  For example, "aaabbc" becomes "3a2b1c".
+- `fn rle_decode(s: &str) -> String` — decodes a run-length encoded string back to
+  the original. For example, "3a2b1c" becomes "aaabbc".
+  Assume counts are single or multi-digit numbers.
+"""
+tags = ["strings", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_encode_basic() {
+        assert_eq!(rle_encode("aaabbc"), "3a2b1c");
+        assert_eq!(rle_encode("a"), "1a");
+    }
+    #[test]
+    fn test_encode_no_repeats() {
+        assert_eq!(rle_encode("abcde"), "1a1b1c1d1e");
+    }
+    #[test]
+    fn test_encode_empty() {
+        assert_eq!(rle_encode(""), "");
+    }
+    #[test]
+    fn test_decode_basic() {
+        assert_eq!(rle_decode("3a2b1c"), "aaabbc");
+    }
+    #[test]
+    fn test_roundtrip() {
+        let original = "aaabbccccddde";
+        assert_eq!(rle_decode(&rle_encode(original)), original);
+    }
+    #[test]
+    fn test_decode_large_count() {
+        assert_eq!(rle_decode("12a"), "aaaaaaaaaaaa");
+    }
+}
+"""
+expected_functions = ["rle_encode", "rle_decode"]
+
+# --- 11. Caesar Cipher ---
+
+[[cases]]
+id = "caesar_cipher"
+name = "Caesar cipher"
+description = "Encrypt and decrypt with a Caesar cipher shift"
+prompt = """
+Write two Rust functions:
+- `fn caesar_encrypt(text: &str, shift: u8) -> String` — shifts each ASCII letter
+  forward by `shift` positions, wrapping around (z+1 = a). Non-letter characters
+  are left unchanged. Preserve case.
+- `fn caesar_decrypt(text: &str, shift: u8) -> String` — reverses the encryption
+  by shifting backward.
+"""
+tags = ["strings", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_encrypt_basic() {
+        assert_eq!(caesar_encrypt("abc", 1), "bcd");
+        assert_eq!(caesar_encrypt("xyz", 3), "abc");
+    }
+    #[test]
+    fn test_encrypt_preserves_case() {
+        assert_eq!(caesar_encrypt("Hello, World!", 13), "Uryyb, Jbeyq!");
+    }
+    #[test]
+    fn test_decrypt_reverses_encrypt() {
+        let original = "The quick brown fox!";
+        let encrypted = caesar_encrypt(original, 7);
+        assert_eq!(caesar_decrypt(&encrypted, 7), original);
+    }
+    #[test]
+    fn test_shift_zero() {
+        assert_eq!(caesar_encrypt("hello", 0), "hello");
+    }
+    #[test]
+    fn test_full_rotation() {
+        assert_eq!(caesar_encrypt("hello", 26), "hello");
+    }
+}
+"""
+expected_functions = ["caesar_encrypt", "caesar_decrypt"]
+
+# --- 12. Unique Elements ---
+
+[[cases]]
+id = "unique_elements"
+name = "Unique elements preserving order"
+description = "Remove duplicates from a vector while preserving order"
+prompt = """
+Write a Rust function `fn unique<T: Eq + std::hash::Hash + Clone>(items: Vec<T>) -> Vec<T>`
+that removes duplicate elements from a vector while preserving the order of first
+occurrence. For example, [1, 2, 3, 2, 1, 4] becomes [1, 2, 3, 4].
+"""
+tags = ["data-structures", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_with_duplicates() {
+        assert_eq!(unique(vec![1, 2, 3, 2, 1, 4]), vec![1, 2, 3, 4]);
+    }
+    #[test]
+    fn test_no_duplicates() {
+        assert_eq!(unique(vec![1, 2, 3]), vec![1, 2, 3]);
+    }
+    #[test]
+    fn test_all_same() {
+        assert_eq!(unique(vec![5, 5, 5, 5]), vec![5]);
+    }
+    #[test]
+    fn test_empty() {
+        assert_eq!(unique(Vec::<i32>::new()), Vec::<i32>::new());
+    }
+    #[test]
+    fn test_strings() {
+        assert_eq!(
+            unique(vec!["a", "b", "a", "c", "b"]),
+            vec!["a", "b", "c"]
+        );
+    }
+}
+"""
+expected_functions = ["unique"]
+
+# --- 13. Parse CSV ---
+
+[[cases]]
+id = "parse_csv"
+name = "Parse CSV string"
+description = "Parse a CSV string into a 2D vector of strings"
+prompt = """
+Write a Rust function `fn parse_csv(input: &str) -> Vec<Vec<String>>` that parses
+a CSV string into a vector of rows, where each row is a vector of field strings.
+Fields are separated by commas. Handle quoted fields: a field enclosed in double
+quotes can contain commas and newlines. Two consecutive double quotes inside a
+quoted field represent a literal double quote. Lines are separated by newlines.
+Trim leading/trailing whitespace from unquoted fields.
+"""
+tags = ["strings", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn s(x: &str) -> String { x.to_string() }
+
+    #[test]
+    fn test_simple() {
+        let result = parse_csv("a,b,c\n1,2,3");
+        assert_eq!(result, vec![
+            vec![s("a"), s("b"), s("c")],
+            vec![s("1"), s("2"), s("3")],
+        ]);
+    }
+    #[test]
+    fn test_quoted_field_with_comma() {
+        let result = parse_csv("name,value\n\"hello, world\",42");
+        assert_eq!(result[1][0], "hello, world");
+        assert_eq!(result[1][1], "42");
+    }
+    #[test]
+    fn test_escaped_quotes() {
+        let result = parse_csv("\"she said \"\"hi\"\"\"");
+        assert_eq!(result[0][0], "she said \"hi\"");
+    }
+    #[test]
+    fn test_empty_input() {
+        let result = parse_csv("");
+        assert!(result.is_empty() || result == vec![vec![s("")]]);
+    }
+    #[test]
+    fn test_whitespace_trimming() {
+        let result = parse_csv(" a , b , c ");
+        assert_eq!(result[0], vec![s("a"), s("b"), s("c")]);
+    }
+}
+"""
+expected_functions = ["parse_csv"]
+
+# --- 14. GCD and LCM ---
+
+[[cases]]
+id = "gcd_lcm"
+name = "GCD and LCM"
+description = "Compute greatest common divisor and least common multiple"
+prompt = """
+Write two Rust functions:
+- `fn gcd(a: u64, b: u64) -> u64` — returns the greatest common divisor using
+  the Euclidean algorithm. gcd(0, n) = gcd(n, 0) = n.
+- `fn lcm(a: u64, b: u64) -> u64` — returns the least common multiple.
+  lcm(0, n) = lcm(n, 0) = 0. Use the relationship lcm(a,b) = a * b / gcd(a,b)
+  (be careful about overflow — compute a / gcd(a,b) * b).
+"""
+tags = ["algorithms", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_gcd_basic() {
+        assert_eq!(gcd(12, 8), 4);
+        assert_eq!(gcd(54, 24), 6);
+        assert_eq!(gcd(7, 13), 1);
+    }
+    #[test]
+    fn test_gcd_with_zero() {
+        assert_eq!(gcd(0, 5), 5);
+        assert_eq!(gcd(5, 0), 5);
+        assert_eq!(gcd(0, 0), 0);
+    }
+    #[test]
+    fn test_lcm_basic() {
+        assert_eq!(lcm(4, 6), 12);
+        assert_eq!(lcm(3, 5), 15);
+        assert_eq!(lcm(12, 8), 24);
+    }
+    #[test]
+    fn test_lcm_with_zero() {
+        assert_eq!(lcm(0, 5), 0);
+        assert_eq!(lcm(5, 0), 0);
+    }
+    #[test]
+    fn test_same_number() {
+        assert_eq!(gcd(7, 7), 7);
+        assert_eq!(lcm(7, 7), 7);
+    }
+}
+"""
+expected_functions = ["gcd", "lcm"]
+
+# --- 15. Reverse Words ---
+
+[[cases]]
+id = "reverse_words"
+name = "Reverse words in a sentence"
+description = "Reverse the order of words in a string"
+prompt = """
+Write a Rust function `fn reverse_words(s: &str) -> String` that reverses the order
+of words in the given string. Words are separated by whitespace. Multiple spaces
+between words should be collapsed to a single space. Leading and trailing whitespace
+should be removed. For example, "  hello   world  " becomes "world hello".
+"""
+tags = ["strings", "basics"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_basic() {
+        assert_eq!(reverse_words("hello world"), "world hello");
+    }
+    #[test]
+    fn test_multiple_words() {
+        assert_eq!(reverse_words("the quick brown fox"), "fox brown quick the");
+    }
+    #[test]
+    fn test_extra_spaces() {
+        assert_eq!(reverse_words("  hello   world  "), "world hello");
+    }
+    #[test]
+    fn test_single_word() {
+        assert_eq!(reverse_words("hello"), "hello");
+    }
+    #[test]
+    fn test_empty() {
+        assert_eq!(reverse_words(""), "");
+        assert_eq!(reverse_words("   "), "");
+    }
+}
+"""
+expected_functions = ["reverse_words"]

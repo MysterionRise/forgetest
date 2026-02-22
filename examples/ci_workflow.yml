@@ -1,0 +1,82 @@
+# Example GitHub Actions workflow for running forgetest in CI.
+#
+# Copy this to .github/workflows/llm-eval.yml in your repository.
+# Make sure to set the ANTHROPIC_API_KEY secret in your repository settings.
+
+name: LLM Eval
+
+on:
+  # Run weekly
+  schedule:
+    - cron: '0 6 * * 1'
+  # Allow manual triggers
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  eval:
+    name: Run LLM Evaluations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install forgetest
+        run: cargo install --path crates/forgetest-cli
+
+      - name: Validate eval sets
+        run: forgetest validate --eval-set eval-sets/
+
+      - name: Run evaluations
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          forgetest run \
+            --eval-set eval-sets/rust-basics.toml \
+            --models anthropic/claude-sonnet-4-20250514 \
+            --format all \
+            --output results/
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-${{ github.run_number }}
+          path: results/
+
+      # Optional: Download previous baseline and check for regressions
+      - name: Download baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: eval-baseline
+          path: baseline/
+        continue-on-error: true
+
+      - name: Check for regressions
+        if: hashFiles('baseline/report.json') != ''
+        run: |
+          forgetest compare \
+            --baseline baseline/report.json \
+            --current results/report-*.json \
+            --fail-on-regression \
+            --format markdown
+
+      # Optional: Upload SARIF for GitHub Code Scanning
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results/
+        continue-on-error: true

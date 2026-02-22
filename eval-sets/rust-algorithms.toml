@@ -1,0 +1,838 @@
+[eval_set]
+id = "rust-algorithms"
+name = "Rust Algorithms"
+description = "Advanced algorithmic coding tasks in Rust"
+default_language = "rust"
+default_timeout_secs = 120
+
+# --- 1. Topological Sort ---
+
+[[cases]]
+id = "topological_sort"
+name = "Topological sort (Kahn's algorithm)"
+description = "Implement topological sort on a directed acyclic graph"
+prompt = """
+Write a Rust function that performs topological sort on a directed acyclic graph (DAG)
+using Kahn's algorithm (BFS-based):
+
+```rust
+/// Performs topological sort on a DAG.
+/// `num_nodes` is the number of nodes (labeled 0..num_nodes).
+/// `edges` is a list of (from, to) directed edges.
+/// Returns Some(ordering) if the graph is a DAG, or None if it contains a cycle.
+pub fn topological_sort(num_nodes: usize, edges: &[(usize, usize)]) -> Option<Vec<usize>>
+```
+
+Use Kahn's algorithm: compute in-degrees, start with zero in-degree nodes,
+process them by removing their edges and adding newly zero in-degree nodes.
+"""
+tags = ["algorithms", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn is_valid_topo_order(num_nodes: usize, edges: &[(usize, usize)], order: &[usize]) -> bool {
+        if order.len() != num_nodes { return false; }
+        let mut pos = vec![0usize; num_nodes];
+        for (i, &node) in order.iter().enumerate() {
+            pos[node] = i;
+        }
+        edges.iter().all(|&(from, to)| pos[from] < pos[to])
+    }
+
+    #[test]
+    fn test_simple_dag() {
+        let edges = vec![(0, 1), (0, 2), (1, 3), (2, 3)];
+        let result = topological_sort(4, &edges).unwrap();
+        assert!(is_valid_topo_order(4, &edges, &result));
+    }
+
+    #[test]
+    fn test_linear_chain() {
+        let edges = vec![(0, 1), (1, 2), (2, 3)];
+        let result = topological_sort(4, &edges).unwrap();
+        assert_eq!(result, vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_cycle_detection() {
+        let edges = vec![(0, 1), (1, 2), (2, 0)];
+        assert!(topological_sort(3, &edges).is_none());
+    }
+
+    #[test]
+    fn test_no_edges() {
+        let result = topological_sort(3, &[]).unwrap();
+        assert_eq!(result.len(), 3);
+    }
+
+    #[test]
+    fn test_single_node() {
+        let result = topological_sort(1, &[]).unwrap();
+        assert_eq!(result, vec![0]);
+    }
+}
+"""
+expected_functions = ["topological_sort"]
+
+# --- 2. Dijkstra ---
+
+[[cases]]
+id = "dijkstra"
+name = "Dijkstra's shortest path"
+description = "Find shortest paths in a weighted graph using Dijkstra's algorithm"
+prompt = """
+Write a Rust function that implements Dijkstra's shortest path algorithm:
+
+```rust
+use std::collections::BinaryHeap;
+use std::cmp::Reverse;
+
+/// Represents a weighted edge: (neighbor, weight).
+/// Finds shortest distances from `start` to all other nodes.
+/// Returns a vector where result[i] is the shortest distance from `start` to node `i`.
+/// Use `u64::MAX` for unreachable nodes.
+/// `adj` is an adjacency list: adj[node] = vec![(neighbor, weight), ...]
+pub fn dijkstra(adj: &[Vec<(usize, u64)>], start: usize) -> Vec<u64>
+```
+
+Use a min-heap (BinaryHeap with Reverse) for efficiency.
+"""
+tags = ["algorithms", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_simple_graph() {
+        // 0 --1--> 1 --2--> 2
+        // 0 --4--> 2
+        let adj = vec![
+            vec![(1, 1), (2, 4)],
+            vec![(2, 2)],
+            vec![],
+        ];
+        let dist = dijkstra(&adj, 0);
+        assert_eq!(dist[0], 0);
+        assert_eq!(dist[1], 1);
+        assert_eq!(dist[2], 3); // 0->1->2 is shorter than 0->2
+    }
+
+    #[test]
+    fn test_unreachable() {
+        let adj = vec![
+            vec![(1, 1)],
+            vec![],
+            vec![], // node 2 is unreachable from 0
+        ];
+        let dist = dijkstra(&adj, 0);
+        assert_eq!(dist[2], u64::MAX);
+    }
+
+    #[test]
+    fn test_single_node() {
+        let adj = vec![vec![]];
+        let dist = dijkstra(&adj, 0);
+        assert_eq!(dist, vec![0]);
+    }
+
+    #[test]
+    fn test_diamond() {
+        // 0->1 (1), 0->2 (5), 1->3 (3), 2->3 (1)
+        let adj = vec![
+            vec![(1, 1), (2, 5)],
+            vec![(3, 3)],
+            vec![(3, 1)],
+            vec![],
+        ];
+        let dist = dijkstra(&adj, 0);
+        assert_eq!(dist[3], 4); // 0->1->3
+    }
+}
+"""
+expected_functions = ["dijkstra"]
+
+# --- 3. LRU Cache ---
+
+[[cases]]
+id = "lru_cache"
+name = "LRU cache"
+description = "Implement an LRU cache with O(1) get and put"
+prompt = """
+Implement an LRU (Least Recently Used) cache in Rust:
+
+```rust
+use std::collections::HashMap;
+
+pub struct LruCache<K, V> {
+    // your fields here
+}
+
+impl<K: Eq + std::hash::Hash + Clone, V> LruCache<K, V> {
+    /// Create a new LRU cache with the given capacity.
+    pub fn new(capacity: usize) -> Self { ... }
+
+    /// Get the value for the key, if it exists. Marks the key as recently used.
+    pub fn get(&mut self, key: &K) -> Option<&V> { ... }
+
+    /// Insert a key-value pair. If the cache is full, evict the least recently used entry.
+    /// If the key already exists, update the value and mark as recently used.
+    pub fn put(&mut self, key: K, value: V) { ... }
+
+    /// Return the current number of entries.
+    pub fn len(&self) -> usize { ... }
+}
+```
+
+You may use a Vec, VecDeque, or a linked list approach for ordering.
+The get and put operations should be efficient.
+"""
+tags = ["algorithms", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_basic_operations() {
+        let mut cache = LruCache::new(2);
+        cache.put(1, "one");
+        cache.put(2, "two");
+        assert_eq!(cache.get(&1), Some(&"one"));
+        assert_eq!(cache.get(&3), None);
+    }
+
+    #[test]
+    fn test_eviction() {
+        let mut cache = LruCache::new(2);
+        cache.put(1, "one");
+        cache.put(2, "two");
+        cache.put(3, "three"); // evicts key 1
+        assert_eq!(cache.get(&1), None);
+        assert_eq!(cache.get(&2), Some(&"two"));
+        assert_eq!(cache.get(&3), Some(&"three"));
+    }
+
+    #[test]
+    fn test_access_updates_order() {
+        let mut cache = LruCache::new(2);
+        cache.put(1, "one");
+        cache.put(2, "two");
+        cache.get(&1); // makes 1 recently used, 2 is now LRU
+        cache.put(3, "three"); // evicts key 2
+        assert_eq!(cache.get(&1), Some(&"one"));
+        assert_eq!(cache.get(&2), None);
+        assert_eq!(cache.get(&3), Some(&"three"));
+    }
+
+    #[test]
+    fn test_update_existing() {
+        let mut cache = LruCache::new(2);
+        cache.put(1, "one");
+        cache.put(1, "ONE");
+        assert_eq!(cache.get(&1), Some(&"ONE"));
+        assert_eq!(cache.len(), 1);
+    }
+
+    #[test]
+    fn test_len() {
+        let mut cache = LruCache::new(3);
+        assert_eq!(cache.len(), 0);
+        cache.put(1, "a");
+        assert_eq!(cache.len(), 1);
+        cache.put(2, "b");
+        cache.put(3, "c");
+        cache.put(4, "d"); // evicts, still len 3
+        assert_eq!(cache.len(), 3);
+    }
+}
+"""
+expected_types = ["LruCache"]
+
+# --- 4. Trie ---
+
+[[cases]]
+id = "trie"
+name = "Trie (prefix tree)"
+description = "Implement a trie with insert, search, and starts_with"
+prompt = """
+Implement a Trie (prefix tree) in Rust:
+
+```rust
+pub struct Trie {
+    // your fields here
+}
+
+impl Trie {
+    /// Create a new empty trie.
+    pub fn new() -> Self { ... }
+
+    /// Insert a word into the trie.
+    pub fn insert(&mut self, word: &str) { ... }
+
+    /// Returns true if the word is in the trie.
+    pub fn search(&self, word: &str) -> bool { ... }
+
+    /// Returns true if any word in the trie starts with the given prefix.
+    pub fn starts_with(&self, prefix: &str) -> bool { ... }
+}
+```
+
+Use a HashMap<char, Trie> or similar approach for children.
+"""
+tags = ["algorithms", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_insert_and_search() {
+        let mut trie = Trie::new();
+        trie.insert("apple");
+        assert!(trie.search("apple"));
+        assert!(!trie.search("app"));
+    }
+
+    #[test]
+    fn test_starts_with() {
+        let mut trie = Trie::new();
+        trie.insert("apple");
+        assert!(trie.starts_with("app"));
+        assert!(trie.starts_with("apple"));
+        assert!(!trie.starts_with("b"));
+    }
+
+    #[test]
+    fn test_multiple_words() {
+        let mut trie = Trie::new();
+        trie.insert("apple");
+        trie.insert("app");
+        trie.insert("banana");
+        assert!(trie.search("apple"));
+        assert!(trie.search("app"));
+        assert!(trie.search("banana"));
+        assert!(!trie.search("ban"));
+    }
+
+    #[test]
+    fn test_empty_string() {
+        let mut trie = Trie::new();
+        trie.insert("");
+        assert!(trie.search(""));
+        assert!(trie.starts_with(""));
+    }
+
+    #[test]
+    fn test_not_found() {
+        let trie = Trie::new();
+        assert!(!trie.search("anything"));
+        assert!(!trie.starts_with("any"));
+    }
+}
+"""
+expected_types = ["Trie"]
+
+# --- 5. Minimum Spanning Tree (Kruskal's) ---
+
+[[cases]]
+id = "min_spanning_tree"
+name = "Minimum spanning tree (Kruskal's)"
+description = "Find the minimum spanning tree using Kruskal's algorithm"
+prompt = """
+Write a Rust function that finds the minimum spanning tree of an undirected weighted graph
+using Kruskal's algorithm:
+
+```rust
+/// An edge in the graph: (node_a, node_b, weight).
+pub type Edge = (usize, usize, u64);
+
+/// Returns the edges in the minimum spanning tree and its total weight.
+/// `num_nodes` is the number of nodes (0..num_nodes).
+/// `edges` is the list of undirected edges.
+/// Returns None if the graph is not connected.
+pub fn kruskal(num_nodes: usize, edges: &[Edge]) -> Option<(Vec<Edge>, u64)>
+```
+
+You will need a Union-Find (disjoint set) data structure internally.
+Sort edges by weight, then greedily add edges that don't form a cycle.
+"""
+tags = ["algorithms", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_simple_triangle() {
+        let edges = vec![(0, 1, 1), (1, 2, 2), (0, 2, 3)];
+        let (mst, total) = kruskal(3, &edges).unwrap();
+        assert_eq!(total, 3); // edges (0,1,1) and (1,2,2)
+        assert_eq!(mst.len(), 2);
+    }
+
+    #[test]
+    fn test_square() {
+        // 0--1--2--3--0 with a diagonal
+        let edges = vec![
+            (0, 1, 1), (1, 2, 4), (2, 3, 2), (3, 0, 5), (0, 2, 3),
+        ];
+        let (mst, total) = kruskal(4, &edges).unwrap();
+        assert_eq!(total, 6); // 1 + 3 + 2
+        assert_eq!(mst.len(), 3);
+    }
+
+    #[test]
+    fn test_disconnected() {
+        let edges = vec![(0, 1, 1)]; // node 2 is disconnected
+        assert!(kruskal(3, &edges).is_none());
+    }
+
+    #[test]
+    fn test_single_node() {
+        let (mst, total) = kruskal(1, &[]).unwrap();
+        assert_eq!(total, 0);
+        assert!(mst.is_empty());
+    }
+
+    #[test]
+    fn test_two_nodes() {
+        let (mst, total) = kruskal(2, &[(0, 1, 5)]).unwrap();
+        assert_eq!(total, 5);
+        assert_eq!(mst.len(), 1);
+    }
+}
+"""
+expected_functions = ["kruskal"]
+
+# --- 6. Longest Common Subsequence ---
+
+[[cases]]
+id = "longest_common_subsequence"
+name = "Longest common subsequence"
+description = "Find the longest common subsequence of two strings"
+prompt = """
+Write a Rust function that finds the longest common subsequence (LCS) of two strings
+using dynamic programming:
+
+```rust
+/// Returns the longest common subsequence of two strings.
+/// If there are multiple LCS of the same length, return any one.
+/// For example, lcs("abcde", "ace") returns "ace".
+pub fn lcs(a: &str, b: &str) -> String
+```
+
+Use the standard DP table approach: build an (m+1) x (n+1) table, then backtrack
+to reconstruct the subsequence.
+"""
+tags = ["algorithms", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn is_subsequence(s: &str, sub: &str) -> bool {
+        let mut it = s.chars();
+        sub.chars().all(|c| it.any(|sc| sc == c))
+    }
+
+    #[test]
+    fn test_basic() {
+        let result = lcs("abcde", "ace");
+        assert_eq!(result.len(), 3);
+        assert!(is_subsequence("abcde", &result));
+        assert!(is_subsequence("ace", &result));
+    }
+
+    #[test]
+    fn test_no_common() {
+        let result = lcs("abc", "xyz");
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_identical() {
+        assert_eq!(lcs("hello", "hello"), "hello");
+    }
+
+    #[test]
+    fn test_one_empty() {
+        assert_eq!(lcs("", "abc"), "");
+        assert_eq!(lcs("abc", ""), "");
+    }
+
+    #[test]
+    fn test_longer() {
+        let result = lcs("AGGTAB", "GXTXAYB");
+        assert_eq!(result.len(), 4); // "GTAB"
+        assert!(is_subsequence("AGGTAB", &result));
+        assert!(is_subsequence("GXTXAYB", &result));
+    }
+}
+"""
+expected_functions = ["lcs"]
+
+# --- 7. Serialize Binary Tree ---
+
+[[cases]]
+id = "serialize_binary_tree"
+name = "Serialize and deserialize binary tree"
+description = "Serialize a binary tree to a string and deserialize it back"
+prompt = """
+Implement serialization and deserialization of a binary tree in Rust:
+
+```rust
+/// A binary tree node.
+#[derive(Debug, PartialEq)]
+pub struct TreeNode {
+    pub val: i32,
+    pub left: Option<Box<TreeNode>>,
+    pub right: Option<Box<TreeNode>>,
+}
+
+impl TreeNode {
+    pub fn new(val: i32) -> Self {
+        TreeNode { val, left: None, right: None }
+    }
+}
+
+/// Serialize a binary tree to a string using preorder traversal.
+/// Use "null" for empty nodes. Separate values with commas.
+/// Example: tree [1, 2, 3, null, null, 4, 5] serializes to "1,2,null,null,3,4,null,null,5,null,null"
+pub fn serialize(root: &Option<Box<TreeNode>>) -> String { ... }
+
+/// Deserialize a string back into a binary tree.
+pub fn deserialize(data: &str) -> Option<Box<TreeNode>> { ... }
+```
+"""
+tags = ["algorithms", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn node(val: i32, left: Option<Box<TreeNode>>, right: Option<Box<TreeNode>>) -> Option<Box<TreeNode>> {
+        Some(Box::new(TreeNode { val, left, right }))
+    }
+
+    fn leaf(val: i32) -> Option<Box<TreeNode>> {
+        node(val, None, None)
+    }
+
+    #[test]
+    fn test_roundtrip_simple() {
+        let tree = node(1, leaf(2), leaf(3));
+        let s = serialize(&tree);
+        let result = deserialize(&s);
+        assert_eq!(tree, result);
+    }
+
+    #[test]
+    fn test_roundtrip_asymmetric() {
+        let tree = node(1, node(2, leaf(4), None), leaf(3));
+        let s = serialize(&tree);
+        let result = deserialize(&s);
+        assert_eq!(tree, result);
+    }
+
+    #[test]
+    fn test_empty_tree() {
+        let s = serialize(&None);
+        let result = deserialize(&s);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_single_node() {
+        let tree = leaf(42);
+        let s = serialize(&tree);
+        let result = deserialize(&s);
+        assert_eq!(tree, result);
+    }
+
+    #[test]
+    fn test_left_skewed() {
+        let tree = node(1, node(2, leaf(3), None), None);
+        let s = serialize(&tree);
+        let result = deserialize(&s);
+        assert_eq!(tree, result);
+    }
+}
+"""
+expected_functions = ["serialize", "deserialize"]
+expected_types = ["TreeNode"]
+
+# --- 8. Rabin-Karp ---
+
+[[cases]]
+id = "rabin_karp"
+name = "Rabin-Karp string search"
+description = "Find all occurrences of a pattern in text using rolling hash"
+prompt = """
+Write a Rust function that implements the Rabin-Karp string search algorithm:
+
+```rust
+/// Find all starting indices where `pattern` occurs in `text`.
+/// Use a rolling hash for efficient comparison.
+/// Returns indices in ascending order.
+pub fn rabin_karp(text: &str, pattern: &str) -> Vec<usize>
+```
+
+Use a polynomial rolling hash with a prime base (e.g., base=256, modulus=101 or a
+larger prime). When hashes match, verify with actual string comparison to handle
+hash collisions.
+"""
+tags = ["algorithms", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_basic() {
+        assert_eq!(rabin_karp("hello world", "world"), vec![6]);
+    }
+
+    #[test]
+    fn test_multiple_matches() {
+        assert_eq!(rabin_karp("abababab", "ab"), vec![0, 2, 4, 6]);
+    }
+
+    #[test]
+    fn test_no_match() {
+        assert_eq!(rabin_karp("hello", "xyz"), vec![]);
+    }
+
+    #[test]
+    fn test_full_match() {
+        assert_eq!(rabin_karp("abc", "abc"), vec![0]);
+    }
+
+    #[test]
+    fn test_empty_pattern() {
+        // Empty pattern could match everywhere or nowhere; accept either
+        let result = rabin_karp("hello", "");
+        assert!(result.is_empty() || result.len() == 6);
+    }
+
+    #[test]
+    fn test_pattern_longer_than_text() {
+        assert_eq!(rabin_karp("hi", "hello"), vec![]);
+    }
+
+    #[test]
+    fn test_single_char() {
+        assert_eq!(rabin_karp("aaa", "a"), vec![0, 1, 2]);
+    }
+}
+"""
+expected_functions = ["rabin_karp"]
+
+# --- 9. Union-Find ---
+
+[[cases]]
+id = "union_find"
+name = "Union-Find (disjoint set)"
+description = "Implement Union-Find with path compression and union by rank"
+prompt = """
+Implement a Union-Find (disjoint set) data structure in Rust:
+
+```rust
+pub struct UnionFind {
+    // your fields here
+}
+
+impl UnionFind {
+    /// Create a new UnionFind with `n` elements (0..n), each in its own set.
+    pub fn new(n: usize) -> Self { ... }
+
+    /// Find the root of the set containing `x`. Use path compression.
+    pub fn find(&mut self, x: usize) -> usize { ... }
+
+    /// Union the sets containing `x` and `y`. Use union by rank.
+    /// Returns true if x and y were in different sets (union happened).
+    pub fn union(&mut self, x: usize, y: usize) -> bool { ... }
+
+    /// Check if `x` and `y` are in the same set.
+    pub fn connected(&mut self, x: usize, y: usize) -> bool { ... }
+
+    /// Return the number of disjoint sets.
+    pub fn count(&self) -> usize { ... }
+}
+```
+"""
+tags = ["algorithms", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_initial_state() {
+        let uf = UnionFind::new(5);
+        assert_eq!(uf.count(), 5);
+    }
+
+    #[test]
+    fn test_union_and_find() {
+        let mut uf = UnionFind::new(5);
+        assert!(uf.union(0, 1));
+        assert!(uf.connected(0, 1));
+        assert!(!uf.connected(0, 2));
+        assert_eq!(uf.count(), 4);
+    }
+
+    #[test]
+    fn test_transitive() {
+        let mut uf = UnionFind::new(5);
+        uf.union(0, 1);
+        uf.union(1, 2);
+        assert!(uf.connected(0, 2));
+        assert_eq!(uf.count(), 3);
+    }
+
+    #[test]
+    fn test_redundant_union() {
+        let mut uf = UnionFind::new(3);
+        assert!(uf.union(0, 1));
+        assert!(!uf.union(0, 1)); // already same set
+    }
+
+    #[test]
+    fn test_all_connected() {
+        let mut uf = UnionFind::new(4);
+        uf.union(0, 1);
+        uf.union(2, 3);
+        uf.union(1, 2);
+        assert_eq!(uf.count(), 1);
+        assert!(uf.connected(0, 3));
+    }
+}
+"""
+expected_types = ["UnionFind"]
+
+# --- 10. A* Pathfinding ---
+
+[[cases]]
+id = "a_star"
+name = "A* pathfinding on a 2D grid"
+description = "Find shortest path on a 2D grid using A* algorithm"
+prompt = """
+Write a Rust function that implements A* pathfinding on a 2D grid:
+
+```rust
+/// A 2D grid where `true` means the cell is walkable, `false` means blocked.
+/// Find the shortest path from `start` to `goal` using A* with Manhattan distance heuristic.
+/// Returns the path as a list of (row, col) coordinates from start to goal (inclusive),
+/// or None if no path exists.
+/// Movement is allowed in 4 directions: up, down, left, right.
+pub fn a_star(
+    grid: &[Vec<bool>],
+    start: (usize, usize),
+    goal: (usize, usize),
+) -> Option<Vec<(usize, usize)>>
+```
+
+Use Manhattan distance as the heuristic. Use a priority queue (BinaryHeap).
+"""
+tags = ["algorithms", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_grid(rows: usize, cols: usize) -> Vec<Vec<bool>> {
+        vec![vec![true; cols]; rows]
+    }
+
+    #[test]
+    fn test_straight_path() {
+        let grid = make_grid(1, 5);
+        let path = a_star(&grid, (0, 0), (0, 4)).unwrap();
+        assert_eq!(path.first(), Some(&(0, 0)));
+        assert_eq!(path.last(), Some(&(0, 4)));
+        assert_eq!(path.len(), 5);
+    }
+
+    #[test]
+    fn test_with_wall() {
+        let mut grid = make_grid(3, 3);
+        grid[1][0] = false;
+        grid[1][1] = false;
+        // Must go around the wall
+        let path = a_star(&grid, (0, 0), (2, 0)).unwrap();
+        assert_eq!(path.first(), Some(&(0, 0)));
+        assert_eq!(path.last(), Some(&(2, 0)));
+        // Path must avoid blocked cells
+        for &(r, c) in &path {
+            assert!(grid[r][c]);
+        }
+    }
+
+    #[test]
+    fn test_no_path() {
+        let mut grid = make_grid(3, 3);
+        // Block all paths to bottom-right
+        grid[0][1] = false;
+        grid[1][0] = false;
+        assert!(a_star(&grid, (0, 0), (2, 2)).is_none());
+    }
+
+    #[test]
+    fn test_start_equals_goal() {
+        let grid = make_grid(3, 3);
+        let path = a_star(&grid, (1, 1), (1, 1)).unwrap();
+        assert_eq!(path, vec![(1, 1)]);
+    }
+
+    #[test]
+    fn test_adjacent() {
+        let grid = make_grid(2, 2);
+        let path = a_star(&grid, (0, 0), (0, 1)).unwrap();
+        assert_eq!(path, vec![(0, 0), (0, 1)]);
+    }
+}
+"""
+expected_functions = ["a_star"]

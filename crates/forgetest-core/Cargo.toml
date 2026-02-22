@@ -1,0 +1,36 @@
+[package]
+name = "forgetest-core"
+description = "Core eval engine, traits, and scoring for forgetest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation = "https://docs.rs/forgetest-core"
+readme = "../../README.md"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+criterion = { workspace = true }
+
+[[bench]]
+name = "scoring"
+harness = false
+
+[[bench]]
+name = "parsing"
+harness = false

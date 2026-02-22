@@ -1,0 +1,28 @@
+[package]
+name = "forgetest-providers"
+description = "LLM provider integrations for forgetest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation = "https://docs.rs/forgetest-providers"
+readme = "../../README.md"
+
+[dependencies]
+forgetest-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+reqwest = { workspace = true }
+
+[dev-dependencies]
+wiremock = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+tempfile = { workspace = true }

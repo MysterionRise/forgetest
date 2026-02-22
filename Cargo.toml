@@ -1,0 +1,61 @@
+[workspace]
+members = [
+    "crates/forgetest-core",
+    "crates/forgetest-runner",
+    "crates/forgetest-providers",
+    "crates/forgetest-report",
+    "crates/forgetest-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/MysterionRise/forgetest"
+keywords = ["llm", "eval", "benchmark", "testing", "ai"]
+categories = ["development-tools::testing", "command-line-utilities"]
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+toml_edit = "0.22"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Logging / tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Utilities
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tempfile = "3"
+reqwest = { version = "0.12", features = ["json"] }
+# CLI
+clap = { version = "4", features = ["derive"] }
+comfy-table = "7"
+
+# Testing
+wiremock = "0.6"
+assert_cmd = "2"
+predicates = "3"
+
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+
+# Internal crates
+forgetest-core = { version = "0.1.0", path = "crates/forgetest-core" }
+forgetest-runner = { version = "0.1.0", path = "crates/forgetest-runner" }
+forgetest-providers = { version = "0.1.0", path = "crates/forgetest-providers" }
+forgetest-report = { version = "0.1.0", path = "crates/forgetest-report" }
+forgetest-cli = { version = "0.1.0", path = "crates/forgetest-cli" }

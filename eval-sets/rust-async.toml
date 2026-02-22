@@ -1,0 +1,374 @@
+[eval_set]
+id = "rust-async"
+name = "Rust Async"
+description = "Async Rust coding tasks using tokio"
+default_language = "rust"
+default_timeout_secs = 120
+
+# --- 1. Async Timeout ---
+
+[[cases]]
+id = "async_timeout"
+name = "Async timeout wrapper"
+description = "Wrap a future with a timeout"
+prompt = """
+Write a Rust async function using tokio:
+
+```rust
+use std::time::Duration;
+use std::future::Future;
+
+pub async fn with_timeout<T, F>(future: F, duration: Duration) -> Result<T, &'static str>
+where
+    F: Future<Output = T>,
+{
+    // Return Ok(value) if the future completes within the duration,
+    // or Err("timeout") if it exceeds the duration.
+}
+```
+
+Use `tokio::time::timeout` internally. The function should return `Err("timeout")` if the
+future does not complete within the given duration.
+"""
+tags = ["async", "tokio", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn test_completes_in_time() {
+        let result = with_timeout(async { 42 }, Duration::from_secs(1)).await;
+        assert_eq!(result, Ok(42));
+    }
+
+    #[tokio::test]
+    async fn test_timeout_exceeded() {
+        let result = with_timeout(
+            async {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                42
+            },
+            Duration::from_millis(50),
+        ).await;
+        assert_eq!(result, Err("timeout"));
+    }
+
+    #[tokio::test]
+    async fn test_immediate_completion() {
+        let result = with_timeout(async { "hello" }, Duration::from_millis(100)).await;
+        assert_eq!(result, Ok("hello"));
+    }
+}
+"""
+expected_functions = ["with_timeout"]
+
+# --- 2. Concurrent Fetch ---
+
+[[cases]]
+id = "concurrent_fetch"
+name = "Concurrent async operations"
+description = "Run multiple async operations concurrently and collect results"
+prompt = """
+Write a Rust async function using tokio:
+
+```rust
+use std::future::Future;
+
+pub async fn concurrent_map<T, F, Fut>(items: Vec<T>, f: fn(T) -> Fut) -> Vec<Fut::Output>
+where
+    T: Send + 'static,
+    F: Fn(T) -> Fut,
+    Fut: Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    // Execute f(item) for each item concurrently using tokio::spawn,
+    // and return the results in the same order as the input items.
+}
+```
+
+Use `tokio::spawn` to run each operation concurrently. Collect results preserving
+the original order of items.
+"""
+tags = ["async", "tokio", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn double(x: i32) -> i32 {
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        x * 2
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_map() {
+        let items = vec![1, 2, 3, 4, 5];
+        let results = concurrent_map(items, double).await;
+        assert_eq!(results, vec![2, 4, 6, 8, 10]);
+    }
+
+    #[tokio::test]
+    async fn test_empty_input() {
+        let items: Vec<i32> = vec![];
+        let results = concurrent_map(items, double).await;
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_single_item() {
+        let results = concurrent_map(vec![7], double).await;
+        assert_eq!(results, vec![14]);
+    }
+}
+"""
+expected_functions = ["concurrent_map"]
+
+# --- 3. Rate Limiter ---
+
+[[cases]]
+id = "rate_limiter"
+name = "Token bucket rate limiter"
+description = "Implement a token bucket rate limiter using tokio"
+prompt = """
+Write a Rust struct implementing a token bucket rate limiter using tokio:
+
+```rust
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+pub struct RateLimiter {
+    // fields
+}
+
+impl RateLimiter {
+    /// Create a new rate limiter that allows `rate` operations per second.
+    pub fn new(rate: u32) -> Self { ... }
+
+    /// Wait until a token is available, then consume it.
+    /// This should block (async) if no tokens are available.
+    pub async fn acquire(&self) { ... }
+
+    /// Try to acquire a token without waiting.
+    /// Returns true if a token was available, false otherwise.
+    pub async fn try_acquire(&self) -> bool { ... }
+}
+```
+
+The rate limiter should refill tokens at the specified rate per second.
+Use `tokio::time::Instant` for timing.
+"""
+tags = ["async", "tokio", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[tokio::test]
+    async fn test_try_acquire_basic() {
+        let limiter = RateLimiter::new(10); // 10 per second
+        // First acquire should succeed
+        assert!(limiter.try_acquire().await);
+    }
+
+    #[tokio::test]
+    async fn test_acquire_does_not_panic() {
+        let limiter = RateLimiter::new(100);
+        limiter.acquire().await;
+        // Should complete without panic
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiting_effect() {
+        let limiter = RateLimiter::new(2); // 2 per second
+        // Exhaust initial tokens
+        let _ = limiter.try_acquire().await;
+        let _ = limiter.try_acquire().await;
+        // After exhausting, try_acquire might fail (depending on timing)
+        // Wait a bit and try again
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        assert!(limiter.try_acquire().await);
+    }
+}
+"""
+expected_types = ["RateLimiter"]
+
+# --- 4. Async Channel ---
+
+[[cases]]
+id = "async_channel"
+name = "Async bounded channel"
+description = "Producer-consumer with bounded async channel"
+prompt = """
+Write Rust async functions that implement a producer-consumer pattern using tokio channels:
+
+```rust
+use tokio::sync::mpsc;
+
+pub async fn produce(tx: mpsc::Sender<i32>, items: Vec<i32>) {
+    // Send each item through the channel.
+    // If the channel is full, wait until space is available.
+}
+
+pub async fn consume(mut rx: mpsc::Receiver<i32>) -> Vec<i32> {
+    // Receive all items from the channel until it's closed.
+    // Return them as a Vec.
+}
+```
+
+The producer sends all items and then drops the sender (channel closes naturally).
+The consumer collects until the channel is closed.
+"""
+tags = ["async", "tokio", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc;
+
+    #[tokio::test]
+    async fn test_produce_consume() {
+        let (tx, rx) = mpsc::channel(10);
+        let items = vec![1, 2, 3, 4, 5];
+
+        let producer = tokio::spawn(produce(tx, items.clone()));
+        let consumer = tokio::spawn(consume(rx));
+
+        producer.await.unwrap();
+        let result = consumer.await.unwrap();
+        assert_eq!(result, items);
+    }
+
+    #[tokio::test]
+    async fn test_empty_produce() {
+        let (tx, rx) = mpsc::channel(10);
+        let producer = tokio::spawn(produce(tx, vec![]));
+        let consumer = tokio::spawn(consume(rx));
+
+        producer.await.unwrap();
+        let result = consumer.await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_bounded_channel_backpressure() {
+        let (tx, rx) = mpsc::channel(2); // Small buffer
+        let items: Vec<i32> = (0..20).collect();
+
+        let producer = tokio::spawn(produce(tx, items.clone()));
+        let consumer = tokio::spawn(consume(rx));
+
+        producer.await.unwrap();
+        let result = consumer.await.unwrap();
+        assert_eq!(result, items);
+    }
+}
+"""
+expected_functions = ["produce", "consume"]
+
+# --- 5. Retry with Backoff ---
+
+[[cases]]
+id = "retry_with_backoff"
+name = "Retry with exponential backoff"
+description = "Retry an async operation with exponential backoff"
+prompt = """
+Write a Rust async function that retries a fallible async operation with exponential backoff:
+
+```rust
+use std::future::Future;
+use std::time::Duration;
+
+pub async fn retry_with_backoff<T, E, F, Fut>(
+    mut operation: F,
+    max_retries: u32,
+    initial_delay: Duration,
+) -> Result<T, E>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, E>>,
+{
+    // Try the operation up to max_retries + 1 times (1 initial + max_retries retries).
+    // After each failure, wait for an exponentially increasing delay:
+    //   initial_delay, initial_delay * 2, initial_delay * 4, ...
+    // Return the first success, or the last error if all attempts fail.
+}
+```
+"""
+tags = ["async", "tokio", "advanced"]
+
+[cases.expectations]
+should_compile = true
+should_pass_tests = true
+test_file = """
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn test_succeeds_first_try() {
+        let result = retry_with_backoff(
+            || async { Ok::<i32, &str>(42) },
+            3,
+            Duration::from_millis(10),
+        ).await;
+        assert_eq!(result, Ok(42));
+    }
+
+    #[tokio::test]
+    async fn test_succeeds_after_retries() {
+        let counter = Arc::new(AtomicU32::new(0));
+        let c = counter.clone();
+
+        let result = retry_with_backoff(
+            move || {
+                let c = c.clone();
+                async move {
+                    let attempt = c.fetch_add(1, Ordering::SeqCst);
+                    if attempt < 2 {
+                        Err("not yet")
+                    } else {
+                        Ok(42)
+                    }
+                }
+            },
+            5,
+            Duration::from_millis(10),
+        ).await;
+        assert_eq!(result, Ok(42));
+        assert!(counter.load(Ordering::SeqCst) >= 3);
+    }
+
+    #[tokio::test]
+    async fn test_all_retries_exhausted() {
+        let result = retry_with_backoff(
+            || async { Err::<i32, &str>("always fails") },
+            2,
+            Duration::from_millis(10),
+        ).await;
+        assert_eq!(result, Err("always fails"));
+    }
+}
+"""
+expected_functions = ["retry_with_backoff"]
