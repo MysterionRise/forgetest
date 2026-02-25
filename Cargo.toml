@@ -51,7 +51,7 @@ assert_cmd = "2"
 predicates = "3"
 
 # Benchmarking
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 
 # Internal crates
 forgetest-core = { version = "0.1.0", path = "crates/forgetest-core" }
