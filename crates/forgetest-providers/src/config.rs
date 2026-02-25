@@ -261,7 +261,9 @@ pub fn load_config_from(path: Option<&Path>) -> Result<ForgetestConfig> {
 }
 
 fn dirs_path() -> Option<PathBuf> {
+    // Use HOME on Unix, USERPROFILE on Windows
     std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
         .ok()
         .map(|h| PathBuf::from(h).join(".config").join("forgetest"))
 }

@@ -33,6 +33,7 @@ fn make_case(id: &str, test_file: &str) -> EvalCase {
             ..Default::default()
         },
         tags: vec![],
+        dependencies: vec![],
         timeout_secs: Some(120),
         max_tokens: None,
     }
@@ -226,12 +227,12 @@ mod tests {
     .unwrap();
 
     // Code itself compiles, but tests fail to compile due to type mismatch in assert_eq.
-    // Score = 0.4 (compile) + 0.0 (tests) + 0.1 (clippy) = 0.5
+    // Score = 0.3 (compile) + 0.0 (tests) + 0.15 (structure) + 0.1 (clippy) = 0.55
     assert!(result.compilation.success, "source alone should compile");
     let score = Score::compute(&result, &case.expectations);
     assert!(
-        score.overall <= 0.5,
-        "wrong return type should score <= 0.5, got {}",
+        score.overall <= 0.6,
+        "wrong return type should score <= 0.6, got {}",
         score.overall
     );
 }
@@ -319,11 +320,11 @@ mod tests {
     .unwrap();
 
     // Empty lib.rs compiles fine; tests fail; clippy passes
-    // Score = 0.4 (compile) + 0.0 (tests) + 0.1 (clippy) = 0.5
+    // Score = 0.3 (compile) + 0.0 (tests) + 0.15 (structure) + 0.1 (clippy) = 0.55
     assert!(result.compilation.success, "empty lib.rs should compile");
     let score = Score::compute(&result, &case.expectations);
     assert!(
-        score.overall <= 0.5,
+        score.overall <= 0.6,
         "empty code should score low, got {}",
         score.overall
     );

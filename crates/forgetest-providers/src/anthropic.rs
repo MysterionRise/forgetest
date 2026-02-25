@@ -9,13 +9,13 @@ use tracing::instrument;
 use forgetest_core::results::TokenUsage;
 use forgetest_core::traits::{
     extract_code_from_markdown, GenerateRequest, GenerateResponse, LlmProvider, ModelInfo,
+    DEFAULT_SYSTEM_PROMPT,
 };
 
 use crate::error::ProviderError;
 
 const DEFAULT_BASE_URL: &str = "https://api.anthropic.com";
 const DEFAULT_TIMEOUT_SECS: u64 = 120;
-const SYSTEM_PROMPT: &str = "You are a code generation assistant. Respond ONLY with code. Do not include explanations, comments about the code, or markdown formatting unless the code itself requires comments. Output valid, compilable code.";
 
 /// Anthropic API provider.
 pub struct AnthropicProvider {
@@ -99,7 +99,7 @@ impl LlmProvider for AnthropicProvider {
         let system_prompt = request
             .system_prompt
             .clone()
-            .unwrap_or_else(|| SYSTEM_PROMPT.to_string());
+            .unwrap_or_else(|| DEFAULT_SYSTEM_PROMPT.to_string());
 
         // Build context into the prompt
         let mut full_prompt = String::new();
@@ -183,10 +183,16 @@ impl LlmProvider for AnthropicProvider {
         let extracted_code = extract_code_from_markdown(&content);
 
         let total_tokens = api_response.usage.input_tokens + api_response.usage.output_tokens;
-        // Pricing: Claude Sonnet $3/$15 per 1M tokens
-        let estimated_cost = (api_response.usage.input_tokens as f64 * 3.0
-            + api_response.usage.output_tokens as f64 * 15.0)
-            / 1_000_000.0;
+        // Look up per-model pricing from available_models, fall back to Sonnet pricing
+        let (cost_per_1k_in, cost_per_1k_out) = self
+            .available_models()
+            .iter()
+            .find(|m| m.id == api_response.model || request.model == m.id)
+            .map(|m| (m.cost_per_1k_input, m.cost_per_1k_output))
+            .unwrap_or((0.003, 0.015));
+        let estimated_cost = (api_response.usage.input_tokens as f64 * cost_per_1k_in
+            + api_response.usage.output_tokens as f64 * cost_per_1k_out)
+            / 1_000.0;
 
         Ok(GenerateResponse {
             content,

@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
 
 ## Custom Scoring
 
-The default scoring weights (40% compile, 50% tests, 10% clippy) can be computed manually:
+The default scoring weights (30% compile, 45% tests, 15% structure, 10% clippy) can be computed manually:
 
 ```rust
 use forgetest_core::results::Score;
@@ -47,7 +47,7 @@ use forgetest_core::results::Score;
 let score = Score::compute(&eval_result, &expectations);
 println!("Overall: {:.1}%", score.overall * 100.0);
 println!("Compilation: {:.1}%", score.compilation * 100.0);
-println!("Tests: {:.1}%", score.test_pass_rate * 100.0);
+println!("Tests: {:.1}%", score.tests * 100.0);
 println!("Clippy: {:.1}%", score.clippy * 100.0);
 ```
 
@@ -103,6 +103,7 @@ impl LlmProvider for MyProvider {
         vec![ModelInfo {
             id: "my-model".to_string(),
             name: "My Model".to_string(),
+            provider: "my-provider".to_string(),
             max_context: 128_000,
             cost_per_1k_input: 0.001,
             cost_per_1k_output: 0.002,

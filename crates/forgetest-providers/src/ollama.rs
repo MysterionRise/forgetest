@@ -9,13 +9,13 @@ use tracing::instrument;
 use forgetest_core::results::TokenUsage;
 use forgetest_core::traits::{
     extract_code_from_markdown, GenerateRequest, GenerateResponse, LlmProvider, ModelInfo,
+    DEFAULT_SYSTEM_PROMPT,
 };
 
 use crate::error::ProviderError;
 
 const DEFAULT_BASE_URL: &str = "http://localhost:11434";
 const DEFAULT_TIMEOUT_SECS: u64 = 300; // Local models are slower
-const SYSTEM_PROMPT: &str = "You are a code generation assistant. Respond ONLY with code. Do not include explanations, comments about the code, or markdown formatting unless the code itself requires comments. Output valid, compilable code.";
 
 /// Ollama local LLM provider.
 pub struct OllamaProvider {
@@ -104,7 +104,7 @@ impl LlmProvider for OllamaProvider {
         let system_prompt = request
             .system_prompt
             .clone()
-            .unwrap_or_else(|| SYSTEM_PROMPT.to_string());
+            .unwrap_or_else(|| DEFAULT_SYSTEM_PROMPT.to_string());
 
         let mut full_prompt = String::new();
         for file in &request.context_files {

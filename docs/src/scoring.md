@@ -4,12 +4,13 @@ forgetest uses a multi-component scoring system to evaluate LLM-generated code q
 
 ## Score Components
 
-Each eval result receives a score from 0.0 to 1.0 composed of three weighted components:
+Each eval result receives a score from 0.0 to 1.0 composed of four weighted components:
 
 | Component | Weight | Description |
 |-----------|--------|-------------|
-| **Compilation** | 40% | Does the code compile without errors? Binary: 0 or 1. |
-| **Tests** | 50% | Fraction of test cases that pass: `passed / (passed + failed)`. |
+| **Compilation** | 30% | Does the code compile without errors? Binary: 0 or 1. |
+| **Tests** | 45% | Fraction of test cases that pass: `passed / (passed + failed)`. |
+| **Structure** | 15% | Fraction of expected functions/types found in generated code. |
 | **Clippy** | 10% | Penalty for clippy warnings: `max(0, 1 - warnings * 0.1)`. |
 
 ### Score Formula
@@ -19,16 +20,18 @@ if compilation fails:
     overall = 0.0
 else:
     test_score = passed / (passed + failed)    # 0.0 if no tests
+    structure_score = found / expected          # 1.0 if none expected
     clippy_score = max(0.0, 1.0 - warnings * 0.1)
-    overall = 0.4 + test_score * 0.5 + clippy_score * 0.1
+    overall = compilation * 0.3 + test_score * 0.45 + structure_score * 0.15 + clippy_score * 0.1
 ```
 
 Key behaviors:
 
 - **Compilation failure zeroes everything** — if the code doesn't compile, the score is 0.0 regardless of other factors.
-- **Tests dominate** — the 50% weight means test pass rate is the most important factor.
+- **Tests dominate** — the 45% weight means test pass rate is the most important factor.
+- **Structure checks** — verifying expected functions/types are present accounts for 15%.
 - **Clippy is a bonus** — clean code gets 10%, each warning deducts 1%.
-- **A perfect score is 1.0** — compiles (0.4) + all tests pass (0.5) + no clippy warnings (0.1).
+- **A perfect score is 1.0** — compiles (0.3) + all tests pass (0.45) + all expected symbols found (0.15) + no clippy warnings (0.1).
 
 ## Pass@k
 

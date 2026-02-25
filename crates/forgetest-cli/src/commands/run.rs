@@ -70,6 +70,13 @@ pub async fn execute(
     filter: Option<String>,
     config_path: Option<PathBuf>,
 ) -> Result<()> {
+    // Validate inputs
+    anyhow::ensure!(parallelism >= 1, "parallelism must be at least 1");
+    anyhow::ensure!(
+        (0.0..=2.0).contains(&temperature),
+        "temperature must be between 0.0 and 2.0"
+    );
+
     // Load config
     let config = load_config_from(config_path.as_deref())?;
 
@@ -117,8 +124,26 @@ pub async fn execute(
     // Parse Pass@k values
     let pass_k: Vec<u32> = pass_k_str
         .split(',')
-        .filter_map(|s| s.trim().parse().ok())
-        .collect();
+        .map(|s| {
+            s.trim()
+                .parse::<u32>()
+                .map_err(|_| anyhow::anyhow!("invalid pass@k value: '{}'", s.trim()))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    anyhow::ensure!(!pass_k.is_empty(), "pass@k must have at least one value");
+    anyhow::ensure!(
+        pass_k.iter().all(|&k| k >= 1),
+        "pass@k values must be at least 1"
+    );
+
+    // Warn about deterministic sampling with Pass@k > 1
+    let max_k = pass_k.iter().copied().max().unwrap_or(1);
+    if max_k > 1 && temperature == 0.0 {
+        eprintln!(
+            "Warning: Using Pass@k={max_k} with temperature=0.0. \
+             Consider setting --temperature 0.8 for diverse samples."
+        );
+    }
 
     // Create providers
     let mut providers: HashMap<String, Arc<dyn LlmProvider>> = HashMap::new();

@@ -11,6 +11,7 @@ default_timeout_secs = 120
 id = "async_timeout"
 name = "Async timeout wrapper"
 description = "Wrap a future with a timeout"
+dependencies = [{ name = "tokio", version = "1", features = ["full"] }]
 prompt = """
 Write a Rust async function using tokio:
 
@@ -74,6 +75,7 @@ expected_functions = ["with_timeout"]
 id = "concurrent_fetch"
 name = "Concurrent async operations"
 description = "Run multiple async operations concurrently and collect results"
+dependencies = [{ name = "tokio", version = "1", features = ["full"] }]
 prompt = """
 Write a Rust async function using tokio:
 
@@ -139,6 +141,7 @@ expected_functions = ["concurrent_map"]
 id = "rate_limiter"
 name = "Token bucket rate limiter"
 description = "Implement a token bucket rate limiter using tokio"
+dependencies = [{ name = "tokio", version = "1", features = ["full"] }]
 prompt = """
 Write a Rust struct implementing a token bucket rate limiter using tokio:
 
@@ -213,6 +216,7 @@ expected_types = ["RateLimiter"]
 id = "async_channel"
 name = "Async bounded channel"
 description = "Producer-consumer with bounded async channel"
+dependencies = [{ name = "tokio", version = "1", features = ["full"] }]
 prompt = """
 Write Rust async functions that implement a producer-consumer pattern using tokio channels:
 
@@ -290,6 +294,7 @@ expected_functions = ["produce", "consume"]
 id = "retry_with_backoff"
 name = "Retry with exponential backoff"
 description = "Retry an async operation with exponential backoff"
+dependencies = [{ name = "tokio", version = "1", features = ["full"] }]
 prompt = """
 Write a Rust async function that retries a fallible async operation with exponential backoff:
 

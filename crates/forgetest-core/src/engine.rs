@@ -12,6 +12,7 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::Semaphore;
 use uuid::Uuid;
 
+use crate::error::ProviderError;
 use crate::model::{EvalSet, Language};
 use crate::report::{EvalReport, EvalSetSummary};
 use crate::results::{EvalResult, TimingInfo};
@@ -122,6 +123,7 @@ impl EvalEngine {
 
             for case in &eval_set.cases {
                 for attempt in 1..=max_k {
+                    progress.on_eval_start(&case.id, &model_spec.model, attempt);
                     let provider = Arc::clone(provider);
                     let runner = Arc::clone(&self.runner);
                     let semaphore = Arc::clone(&semaphore);
@@ -167,12 +169,14 @@ impl EvalEngine {
                                         let language = case.language.unwrap_or(Language::Rust);
                                         let timeout_secs = case.timeout_secs.unwrap_or(60);
 
+                                        let deps = case.dependencies.clone();
+
                                         // Compile the generated code
                                         let compile_result = runner
                                             .compile(&CompileRequest {
                                                 code: generated_code.clone(),
                                                 language,
-                                                dependencies: vec![],
+                                                dependencies: deps.clone(),
                                                 timeout_secs,
                                             })
                                             .await?;
@@ -189,7 +193,7 @@ impl EvalEngine {
                                                             code: generated_code.clone(),
                                                             test_code: test_file.clone(),
                                                             language,
-                                                            dependencies: vec![],
+                                                            dependencies: deps.clone(),
                                                             timeout_secs,
                                                         })
                                                         .await?,
@@ -212,7 +216,7 @@ impl EvalEngine {
                                                     .run_clippy(&ClippyRequest {
                                                         code: generated_code.clone(),
                                                         language,
-                                                        dependencies: vec![],
+                                                        dependencies: deps,
                                                         timeout_secs,
                                                     })
                                                     .await?,
@@ -243,16 +247,14 @@ impl EvalEngine {
                                         });
                                     }
                                     Err(e) => {
-                                        // Check if the error is permanent (should not retry)
-                                        let err_str = e.to_string();
-                                        if err_str.contains("authentication")
-                                            || err_str.contains("model not found")
+                                        // Downcast to ProviderError for proper classification
+                                        if let Some(provider_err) =
+                                            e.downcast_ref::<ProviderError>()
                                         {
-                                            return Err(e);
-                                        }
-                                        // Use provider's retry-after hint if available
-                                        if err_str.contains("rate limited") {
-                                            if let Some(ms) = parse_retry_after_ms(&err_str) {
+                                            if provider_err.is_permanent() {
+                                                return Err(e);
+                                            }
+                                            if let Some(ms) = provider_err.retry_after_ms() {
                                                 retry_delay = Duration::from_millis(ms);
                                             }
                                         }
@@ -312,25 +314,26 @@ impl EvalEngine {
     }
 }
 
-/// Parse retry-after milliseconds from a ProviderError::RateLimited message.
-fn parse_retry_after_ms(err_msg: &str) -> Option<u64> {
-    // Error format: "rate limited, retry after {ms}ms"
-    err_msg
-        .strip_prefix("rate limited, retry after ")
-        .and_then(|s| s.strip_suffix("ms"))
-        .and_then(|s| s.parse::<u64>().ok())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn parse_retry_after_ms_from_error() {
-        assert_eq!(
-            parse_retry_after_ms("rate limited, retry after 5000ms"),
-            Some(5000)
-        );
-        assert_eq!(parse_retry_after_ms("something else"), None);
+    fn provider_error_classification() {
+        let rate_limited = ProviderError::RateLimited {
+            retry_after_ms: 5000,
+        };
+        assert!(!rate_limited.is_permanent());
+        assert_eq!(rate_limited.retry_after_ms(), Some(5000));
+
+        let auth_failed = ProviderError::AuthenticationFailed("bad key".into());
+        assert!(auth_failed.is_permanent());
+        assert_eq!(auth_failed.retry_after_ms(), None);
+
+        let not_found = ProviderError::ModelNotFound("gpt-99".into());
+        assert!(not_found.is_permanent());
+
+        let timeout = ProviderError::Timeout(120);
+        assert!(!timeout.is_permanent());
     }
 }

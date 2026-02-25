@@ -154,6 +154,13 @@ pub struct ClippyRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Default system prompt
+// ---------------------------------------------------------------------------
+
+/// Default system prompt for code generation providers.
+pub const DEFAULT_SYSTEM_PROMPT: &str = "You are a code generation assistant. Respond ONLY with code. Do not include explanations, comments about the code, or markdown formatting unless the code itself requires comments. Output valid, compilable code.";
+
+// ---------------------------------------------------------------------------
 // Markdown code extraction
 // ---------------------------------------------------------------------------
 

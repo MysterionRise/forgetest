@@ -9,13 +9,13 @@ use tracing::instrument;
 use forgetest_core::results::TokenUsage;
 use forgetest_core::traits::{
     extract_code_from_markdown, GenerateRequest, GenerateResponse, LlmProvider, ModelInfo,
+    DEFAULT_SYSTEM_PROMPT,
 };
 
 use crate::error::ProviderError;
 
 const DEFAULT_BASE_URL: &str = "https://api.openai.com";
 const DEFAULT_TIMEOUT_SECS: u64 = 120;
-const SYSTEM_PROMPT: &str = "You are a code generation assistant. Respond ONLY with code. Do not include explanations, comments about the code, or markdown formatting unless the code itself requires comments. Output valid, compilable code.";
 
 /// OpenAI-compatible API provider.
 pub struct OpenAiProvider {
@@ -96,7 +96,7 @@ impl LlmProvider for OpenAiProvider {
         let system_prompt = request
             .system_prompt
             .clone()
-            .unwrap_or_else(|| SYSTEM_PROMPT.to_string());
+            .unwrap_or_else(|| DEFAULT_SYSTEM_PROMPT.to_string());
 
         let mut full_prompt = String::new();
         for file in &request.context_files {
@@ -159,6 +159,9 @@ impl LlmProvider for OpenAiProvider {
             let body = response.text().await.unwrap_or_default();
             return Err(ProviderError::AuthenticationFailed(body).into());
         }
+        if status == 404 {
+            return Err(ProviderError::ModelNotFound(request.model.clone()).into());
+        }
         if status >= 400 {
             let body = response.text().await.unwrap_or_default();
             return Err(ProviderError::ApiError {
@@ -182,10 +185,16 @@ impl LlmProvider for OpenAiProvider {
             .unwrap_or_default();
         let extracted_code = extract_code_from_markdown(&content);
 
-        // GPT-4.1 pricing: $2/$8 per 1M tokens
-        let estimated_cost = (api_response.usage.prompt_tokens as f64 * 2.0
-            + api_response.usage.completion_tokens as f64 * 8.0)
-            / 1_000_000.0;
+        // Look up per-model pricing from available_models, fall back to GPT-4.1 pricing
+        let (cost_per_1k_in, cost_per_1k_out) = self
+            .available_models()
+            .iter()
+            .find(|m| m.id == api_response.model || request.model == m.id)
+            .map(|m| (m.cost_per_1k_input, m.cost_per_1k_output))
+            .unwrap_or((0.002, 0.008));
+        let estimated_cost = (api_response.usage.prompt_tokens as f64 * cost_per_1k_in
+            + api_response.usage.completion_tokens as f64 * cost_per_1k_out)
+            / 1_000.0;
 
         Ok(GenerateResponse {
             content,

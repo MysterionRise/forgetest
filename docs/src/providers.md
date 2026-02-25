@@ -45,9 +45,9 @@ Supported models:
 
 | Model | ID | Context | Notes |
 |-------|-----|---------|-------|
-| GPT-4.1 | `gpt-4.1` | 128K | Most capable |
-| GPT-4.1 Mini | `gpt-4.1-mini` | 128K | Good balance |
-| GPT-4.1 Nano | `gpt-4.1-nano` | 128K | Fastest |
+| GPT-4.1 | `gpt-4.1` | 1M | Most capable |
+| GPT-4.1 Mini | `gpt-4.1-mini` | 1M | Good balance |
+| GPT-4.1 Nano | `gpt-4.1-nano` | 1M | Fastest |
 
 ## Ollama (Local Models)
 

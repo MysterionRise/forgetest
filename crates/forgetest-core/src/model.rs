@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
+use crate::traits::Dependency;
+
 /// A single evaluation task sent to an LLM.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvalCase {
@@ -31,6 +33,9 @@ pub struct EvalCase {
     /// Tags for filtering eval cases.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// External crate dependencies needed to compile this case.
+    #[serde(default)]
+    pub dependencies: Vec<Dependency>,
     /// Per-case timeout override in seconds.
     #[serde(default)]
     pub timeout_secs: Option<u64>,
@@ -194,6 +199,7 @@ mod tests {
             context: vec![],
             expectations: Expectations::default(),
             tags: vec!["basics".into()],
+            dependencies: vec![],
             timeout_secs: Some(30),
             max_tokens: None,
         };

@@ -167,6 +167,8 @@ pub struct Score {
     pub tests: f64,
     /// Clippy score: 1.0 minus penalty per warning (0.0-1.0).
     pub clippy: f64,
+    /// Expected functions/types score: fraction found (0.0-1.0).
+    pub structure: f64,
     /// Weighted overall score.
     pub overall: f64,
 }
@@ -178,7 +180,11 @@ impl Score {
     /// - Compilation: 1.0 if succeeded, 0.0 if failed
     /// - Tests: ratio of passed / total (0.0 if no tests run)
     /// - Clippy: 1.0 - 0.1 per warning, capped at 0.0
-    /// - Overall: weighted average (compilation 40%, tests 50%, clippy 10%)
+    /// - Structure: fraction of expected_functions and expected_types found
+    /// - Overall: weighted average (compilation 30%, tests 45%, structure 15%, clippy 10%)
+    ///
+    /// If compilation fails, overall is 0.0.
+    /// If no expected_functions/expected_types are defined, structure defaults to 1.0.
     pub fn compute(result: &EvalResult, expectations: &Expectations) -> Score {
         let compilation = if result.compilation.success { 1.0 } else { 0.0 };
 
@@ -203,19 +209,64 @@ impl Score {
             None => 1.0,
         };
 
+        // Check expected functions and types in the generated code
+        let structure = Self::compute_structure_score(
+            &result.generated_code,
+            &expectations.expected_functions,
+            &expectations.expected_types,
+        );
+
         // If compilation failed, everything is 0
         let overall = if compilation == 0.0 {
             0.0
         } else {
-            compilation * 0.4 + tests * 0.5 + clippy * 0.1
+            compilation * 0.3 + tests * 0.45 + structure * 0.15 + clippy * 0.1
         };
 
         Score {
             compilation,
             tests,
             clippy,
+            structure,
             overall,
         }
+    }
+
+    /// Compute the structure score: fraction of expected functions/types found.
+    ///
+    /// Uses simple pattern matching (`fn name` and `struct/enum/type name`) to
+    /// detect presence. Returns 1.0 if no expectations are defined.
+    fn compute_structure_score(
+        code: &str,
+        expected_functions: &[String],
+        expected_types: &[String],
+    ) -> f64 {
+        let total = expected_functions.len() + expected_types.len();
+        if total == 0 {
+            return 1.0;
+        }
+
+        let mut found = 0;
+
+        for func in expected_functions {
+            // Match "fn func_name" with word boundary (followed by non-alphanumeric)
+            let pattern = format!("fn {func}");
+            if code.contains(&pattern) {
+                found += 1;
+            }
+        }
+
+        for type_name in expected_types {
+            // Match "struct Name", "enum Name", or "type Name"
+            let found_type = ["struct ", "enum ", "type "]
+                .iter()
+                .any(|prefix| code.contains(&format!("{prefix}{type_name}")));
+            if found_type {
+                found += 1;
+            }
+        }
+
+        found as f64 / total as f64
     }
 }
 
@@ -279,6 +330,7 @@ mod tests {
         assert_eq!(score.compilation, 1.0);
         assert_eq!(score.tests, 1.0);
         assert_eq!(score.clippy, 1.0);
+        assert_eq!(score.structure, 1.0);
         assert!((score.overall - 1.0).abs() < f64::EPSILON);
     }
 
@@ -310,6 +362,42 @@ mod tests {
         let result = make_result(true, 5, 0, 15);
         let score = Score::compute(&result, &Expectations::default());
         assert_eq!(score.clippy, 0.0);
+    }
+
+    #[test]
+    fn score_expected_functions_found() {
+        let mut result = make_result(true, 5, 0, 0);
+        result.generated_code = "pub fn add(a: i32, b: i32) -> i32 { a + b }".to_string();
+        let expectations = Expectations {
+            expected_functions: vec!["add".into()],
+            ..Expectations::default()
+        };
+        let score = Score::compute(&result, &expectations);
+        assert_eq!(score.structure, 1.0);
+    }
+
+    #[test]
+    fn score_expected_functions_missing() {
+        let mut result = make_result(true, 5, 0, 0);
+        result.generated_code = "pub fn subtract(a: i32, b: i32) -> i32 { a - b }".to_string();
+        let expectations = Expectations {
+            expected_functions: vec!["add".into(), "subtract".into()],
+            ..Expectations::default()
+        };
+        let score = Score::compute(&result, &expectations);
+        assert!((score.structure - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn score_expected_types() {
+        let mut result = make_result(true, 5, 0, 0);
+        result.generated_code = "pub struct MyType { value: i32 }".to_string();
+        let expectations = Expectations {
+            expected_types: vec!["MyType".into()],
+            ..Expectations::default()
+        };
+        let score = Score::compute(&result, &expectations);
+        assert_eq!(score.structure, 1.0);
     }
 
     #[test]

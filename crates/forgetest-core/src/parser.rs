@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use crate::model::{EvalCase, EvalSet, Expectations, Language};
+use crate::traits::Dependency;
 
 /// Intermediate TOML structure for parsing eval set files.
 #[derive(Debug, Deserialize)]
@@ -49,11 +50,21 @@ struct TomlEvalCase {
     #[serde(default)]
     tags: Vec<String>,
     #[serde(default)]
+    dependencies: Vec<TomlDependency>,
+    #[serde(default)]
     timeout_secs: Option<u64>,
     #[serde(default)]
     max_tokens: Option<u32>,
     #[serde(default)]
     expectations: Option<TomlExpectations>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TomlDependency {
+    name: String,
+    version: String,
+    #[serde(default)]
+    features: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -119,6 +130,16 @@ pub fn parse_eval_set_str(content: &str, source_path: &Path) -> Result<EvalSet> 
                 None => Expectations::default(),
             };
 
+            let dependencies = c
+                .dependencies
+                .into_iter()
+                .map(|d| Dependency {
+                    name: d.name,
+                    version: d.version,
+                    features: d.features,
+                })
+                .collect();
+
             Ok(EvalCase {
                 id: c.id,
                 name: c.name,
@@ -128,6 +149,7 @@ pub fn parse_eval_set_str(content: &str, source_path: &Path) -> Result<EvalSet> 
                 context: vec![],
                 expectations,
                 tags: c.tags,
+                dependencies,
                 timeout_secs: c.timeout_secs,
                 max_tokens: c.max_tokens,
             })
@@ -213,6 +235,16 @@ pub fn validate_eval_set(set: &EvalSet) -> Vec<ValidationWarning> {
             warnings.push(ValidationWarning {
                 case_id: Some(case.id.clone()),
                 message: "prompt is empty".into(),
+            });
+        }
+    }
+
+    // Warn about unsupported custom_check
+    for case in &set.cases {
+        if case.expectations.custom_check.is_some() {
+            warnings.push(ValidationWarning {
+                case_id: Some(case.id.clone()),
+                message: "custom_check is not yet implemented and will be ignored".into(),
             });
         }
     }

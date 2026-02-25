@@ -281,6 +281,7 @@ mod tests {
                 ..Default::default()
             },
             tags: vec![],
+            dependencies: vec![],
             timeout_secs: Some(120),
             max_tokens: None,
         };

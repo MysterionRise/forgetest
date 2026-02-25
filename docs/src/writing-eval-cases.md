@@ -36,7 +36,7 @@ Each case has an `[cases.expectations]` section:
 ```toml
 [cases.expectations]
 should_compile = true             # Must the code compile? (default: true)
-should_pass_tests = true          # Must the tests pass? (default: false)
+should_pass_tests = true          # Must the tests pass? (default: true)
 test_file = """                   # Test code appended to generated code
 #[cfg(test)]
 mod tests {
