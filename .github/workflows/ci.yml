@@ -43,7 +43,9 @@ jobs:
 
       - name: Build mdBook
         run: |
-          cargo install mdbook --version 0.4.52 --locked
+          if ! mdbook --version 2>/dev/null | grep -Fqx 'mdbook v0.4.52'; then
+            cargo install mdbook --version 0.4.52 --locked --force
+          fi
           mdbook build docs --dest-dir ../target/book
 
       - name: Dry-run workspace packages
@@ -51,12 +53,16 @@ jobs:
 
       - name: Audit RustSec advisories
         run: |
-          cargo install cargo-audit --version 0.22.2 --locked
+          if ! cargo-audit --version 2>/dev/null | grep -Fqx 'cargo-audit 0.22.2'; then
+            cargo install cargo-audit --version 0.22.2 --locked --force
+          fi
           cargo audit
 
       - name: Audit licenses and sources
         run: |
-          cargo install cargo-deny --version 0.18.5 --locked
+          if ! cargo-deny --version 2>/dev/null | grep -Fqx 'cargo-deny 0.18.5'; then
+            cargo install cargo-deny --version 0.18.5 --locked --force
+          fi
           cargo deny check licenses sources
 
   test:

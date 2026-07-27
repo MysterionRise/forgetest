@@ -433,13 +433,17 @@ fn copy_platform_toolchain_environment(command: &mut Command) {
     for variable in [
         "SystemRoot",
         "WINDIR",
+        "SYSTEMDRIVE",
         "COMSPEC",
         "PATHEXT",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
         "INCLUDE",
         "LIB",
         "LIBPATH",
         "VCINSTALLDIR",
         "VCToolsInstallDir",
+        "VCToolsVersion",
         "VCToolsRedistDir",
         "VSINSTALLDIR",
         "WindowsSdkDir",
@@ -448,6 +452,13 @@ fn copy_platform_toolchain_environment(command: &mut Command) {
         "UCRTVersion",
     ] {
         if let Some(value) = std::env::var_os(variable) {
+            command.env(variable, value);
+        }
+    }
+
+    if let Some(linker) = find_msvc_tools::find_tool("x86_64-pc-windows-msvc", "link.exe") {
+        command.env("CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER", linker.path());
+        for (variable, value) in linker.env() {
             command.env(variable, value);
         }
     }

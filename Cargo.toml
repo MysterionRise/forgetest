@@ -46,6 +46,7 @@ reqwest = { version = "0.12", features = ["json"] }
 sha2 = "0.10"
 libc = "0.2"
 regex = "1"
+find-msvc-tools = "0.1.9"
 # CLI
 clap = { version = "4", features = ["derive"] }
 comfy-table = "7"
