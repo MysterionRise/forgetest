@@ -357,7 +357,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(dockerfile.starts_with("FROM rust:1.92.0-bookworm\n"));
+        assert_eq!(dockerfile.lines().next(), Some("FROM rust:1.92.0-bookworm"));
         assert!(dockerfile.contains("cargo fetch --locked"));
         assert!(dockerfile.contains("USER 10001:10001"));
         assert!(dockerfile.contains("CARGO_NET_OFFLINE=true"));

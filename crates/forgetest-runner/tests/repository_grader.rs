@@ -5,6 +5,26 @@ use forgetest_core::repository_report::GraderCheckKind;
 use forgetest_runner::{DockerRepositoryGrader, DockerVerifierConfig, LocalRepositoryGrader};
 use uuid::Uuid;
 
+#[cfg(not(windows))]
+fn environment_command() -> Vec<String> {
+    vec!["env".into()]
+}
+
+#[cfg(windows)]
+fn environment_command() -> Vec<String> {
+    vec!["cmd.exe".into(), "/C".into(), "set".into()]
+}
+
+#[cfg(not(windows))]
+fn exit_command(code: u8) -> Vec<String> {
+    vec!["sh".into(), "-c".into(), format!("exit {code}")]
+}
+
+#[cfg(windows)]
+fn exit_command(code: u8) -> Vec<String> {
+    vec!["cmd.exe".into(), "/C".into(), format!("exit /B {code}")]
+}
+
 #[tokio::test]
 async fn local_grader_clears_inherited_secrets() {
     std::env::set_var("_FORGETEST_GRADER_SECRET", "must-not-leak");
@@ -17,7 +37,7 @@ async fn local_grader_clears_inherited_secrets() {
             checks: vec![GradeCheckRequest {
                 name: "environment".into(),
                 kind: GraderCheckKind::Other,
-                command: vec!["env".into()],
+                command: environment_command(),
             }],
             timeout: Duration::from_secs(5),
         })
@@ -70,12 +90,12 @@ async fn local_grader_records_named_check_evidence() {
                 GradeCheckRequest {
                     name: "new behavior".into(),
                     kind: GraderCheckKind::FailToPass,
-                    command: vec!["sh".into(), "-c".into(), "exit 0".into()],
+                    command: exit_command(0),
                 },
                 GradeCheckRequest {
                     name: "existing behavior".into(),
                     kind: GraderCheckKind::PassToPass,
-                    command: vec!["sh".into(), "-c".into(), "exit 1".into()],
+                    command: exit_command(1),
                 },
             ],
             timeout: Duration::from_secs(5),
