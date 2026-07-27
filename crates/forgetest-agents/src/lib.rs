@@ -839,10 +839,7 @@ impl AgentExecutor for ProcessAgent {
             .stderr
             .take()
             .context("agent stderr was not captured")?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(request.prompt.as_bytes()).await?;
-            stdin.shutdown().await?;
-        }
+        let stdin = child.stdin.take().context("agent stdin was not captured")?;
 
         let used = Arc::new(AtomicUsize::new(0));
         let exceeded = Arc::new(AtomicBool::new(false));
@@ -869,29 +866,41 @@ impl AgentExecutor for ProcessAgent {
             Exited(std::process::ExitStatus),
             Timeout,
             OutputLimit,
+            Prompt(anyhow::Error),
             EventSink(anyhow::Error),
         }
-        let timeout =
-            tokio::time::sleep(std::time::Duration::from_secs(request.limits.timeout_secs));
-        tokio::pin!(timeout);
         let mut parsed_events = Vec::new();
         let mut event_stream_open = true;
-        let stop = loop {
-            tokio::select! {
-                status = child.wait() => {
-                    break Stop::Exited(status.context("failed waiting for agent")?);
-                }
-                _ = &mut timeout => break Stop::Timeout,
-                _ = notify.notified() => break Stop::OutputLimit,
-                event = event_receiver.recv(), if event_stream_open => {
-                    match event {
-                        Some(event) => {
-                            if let Err(error) = events.emit(&event) {
-                                break Stop::EventSink(error);
-                            }
-                            parsed_events.push(event);
+        let stop = {
+            let prompt_delivery = deliver_prompt(stdin, request.prompt.as_bytes());
+            tokio::pin!(prompt_delivery);
+            let timeout =
+                tokio::time::sleep(std::time::Duration::from_secs(request.limits.timeout_secs));
+            tokio::pin!(timeout);
+            let mut prompt_delivery_open = true;
+            loop {
+                tokio::select! {
+                    status = child.wait() => {
+                        break Stop::Exited(status.context("failed waiting for agent")?);
+                    }
+                    _ = &mut timeout => break Stop::Timeout,
+                    _ = notify.notified() => break Stop::OutputLimit,
+                    result = &mut prompt_delivery, if prompt_delivery_open => {
+                        prompt_delivery_open = false;
+                        if let Err(error) = result {
+                            break Stop::Prompt(error);
                         }
-                        None => event_stream_open = false,
+                    }
+                    event = event_receiver.recv(), if event_stream_open => {
+                        match event {
+                            Some(event) => {
+                                if let Err(error) = events.emit(&event) {
+                                    break Stop::EventSink(error);
+                                }
+                                parsed_events.push(event);
+                            }
+                            None => event_stream_open = false,
+                        }
                     }
                 }
             }
@@ -925,10 +934,13 @@ impl AgentExecutor for ProcessAgent {
         if let Stop::EventSink(error) = &stop {
             anyhow::bail!("agent event sink rejected a streamed event: {error:#}");
         }
+        if let Stop::Prompt(error) = &stop {
+            anyhow::bail!("failed to deliver prompt to agent: {error:#}");
+        }
         let usage = usage_from_events(&parsed_events);
         let observed_exit_code = match &stop {
             Stop::Exited(status) => status.code(),
-            Stop::Timeout | Stop::OutputLimit | Stop::EventSink(_) => None,
+            Stop::Timeout | Stop::OutputLimit | Stop::Prompt(_) | Stop::EventSink(_) => None,
         };
         let budget_exceeded = request
             .limits
@@ -971,6 +983,7 @@ impl AgentExecutor for ProcessAgent {
                     None,
                     Some("agent exceeded output limit".into()),
                 ),
+                Stop::Prompt(_) => unreachable!("prompt errors return above"),
                 Stop::EventSink(_) => unreachable!("event sink errors return above"),
             }
         };
@@ -985,6 +998,22 @@ impl AgentExecutor for ProcessAgent {
             error,
         })
     }
+}
+
+async fn deliver_prompt(mut stdin: tokio::process::ChildStdin, prompt: &[u8]) -> Result<()> {
+    if let Err(error) = stdin.write_all(prompt).await {
+        if error.kind() == std::io::ErrorKind::BrokenPipe {
+            return Ok(());
+        }
+        return Err(error).context("failed writing agent prompt");
+    }
+    if let Err(error) = stdin.shutdown().await {
+        if error.kind() == std::io::ErrorKind::BrokenPipe {
+            return Ok(());
+        }
+        return Err(error).context("failed closing agent prompt stream");
+    }
+    Ok(())
 }
 
 /// Result of a non-secret agent installation and authentication preflight.

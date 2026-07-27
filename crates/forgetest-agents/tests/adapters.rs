@@ -252,7 +252,11 @@ async fn docker_agent_forwards_prompt_when_enabled() {
         .await
         .unwrap();
 
-    assert_eq!(outcome.termination, AgentTerminationReason::Completed);
+    assert_eq!(
+        outcome.termination,
+        AgentTerminationReason::Completed,
+        "Docker agent did not complete: {outcome:#?}"
+    );
     assert!(outcome
         .events
         .iter()
@@ -377,6 +381,51 @@ async fn process_agent_rejects_fast_output_burst() {
 
         assert_eq!(outcome.termination, AgentTerminationReason::OutputLimit);
     }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn process_agent_closes_prompt_before_joining_descendant_output() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempfile::tempdir().unwrap();
+    let script = root.path().join("inherited-pipes.sh");
+    std::fs::write(
+        &script,
+        concat!(
+            "#!/bin/sh\n",
+            "exec 3<&0\n",
+            "(sleep 0.1; IFS= read -r _ <&3 || true) &\n",
+            "exec 3<&-\n",
+            "exit 0\n"
+        ),
+    )
+    .unwrap();
+    let mut permissions = std::fs::metadata(&script).unwrap().permissions();
+    permissions.set_mode(0o700);
+    std::fs::set_permissions(&script, permissions).unwrap();
+    let profile = CommandProfile::generic(script.to_string_lossy(), EventParser::Text);
+    let agent = ProcessAgent::new(profile, identity("generic"));
+
+    let request = AgentRequest {
+        trial_id: Uuid::new_v4(),
+        task_id: "task".into(),
+        prompt: "x".repeat(8 * 1024 * 1024),
+        workspace: root.path().to_path_buf(),
+        limits: AgentLimits {
+            timeout_secs: 5,
+            max_output_bytes: 1024,
+            ..AgentLimits::default()
+        },
+    };
+    let events = MemoryEventSink::default();
+    let execution = agent.execute(&request, &events);
+    let outcome = tokio::time::timeout(std::time::Duration::from_secs(2), execution)
+        .await
+        .expect("agent hung while a descendant retained inherited pipes")
+        .unwrap();
+
+    assert_eq!(outcome.termination, AgentTerminationReason::Completed);
 }
 
 #[cfg(unix)]

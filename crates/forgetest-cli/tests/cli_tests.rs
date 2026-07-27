@@ -634,7 +634,12 @@ fn repository_demo_writes_private_and_redacted_evidence() {
     let public: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(public_path).unwrap()).unwrap();
     assert_eq!(raw["schema_version"], 2);
-    assert_eq!(raw["trials"][0]["status"], "passed");
+    assert_eq!(
+        raw["trials"][0]["status"],
+        "passed",
+        "repository demo trial failed:\n{}",
+        serde_json::to_string_pretty(&raw["trials"][0]).unwrap()
+    );
     assert_eq!(raw["redaction"]["redacted"], false);
     assert_eq!(public["redaction"]["redacted"], true);
     let raw_manifest: serde_json::Value = serde_json::from_str(

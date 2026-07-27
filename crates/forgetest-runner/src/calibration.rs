@@ -130,10 +130,17 @@ async fn apply_reference_patch(
     max_output_bytes: usize,
 ) -> Result<()> {
     let home = tempfile::tempdir().context("failed to create isolated Git home for calibration")?;
+    let staged_patch = home.path().join("reference.patch");
+    fs::copy(patch, &staged_patch).with_context(|| {
+        format!(
+            "failed to stage reference patch for Git: {}",
+            patch.display()
+        )
+    })?;
     let mut command = Command::new("git");
     command
         .args(["apply", "--whitespace=nowarn"])
-        .arg(patch)
+        .arg(staged_patch)
         .current_dir(workspace)
         .env_clear()
         .env("HOME", home.path())

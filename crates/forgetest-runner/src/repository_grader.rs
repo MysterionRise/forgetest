@@ -54,6 +54,9 @@ impl Grader for LocalRepositoryGrader {
                 .env_clear()
                 .env("HOME", isolated_home.path())
                 .env("USERPROFILE", isolated_home.path())
+                .env("TMPDIR", isolated_home.path())
+                .env("TMP", isolated_home.path())
+                .env("TEMP", isolated_home.path())
                 .env(
                     "CARGO_TARGET_DIR",
                     request.workspace.join(format!("target-check-{index}")),
@@ -395,12 +398,63 @@ fn ensure_docker_started(output: &BoundedOutput) -> Result<()> {
 }
 
 fn copy_toolchain_environment(command: &mut Command) {
-    for variable in ["PATH", "RUSTUP_HOME", "CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
+    for variable in [
+        "PATH",
+        "RUSTUP_HOME",
+        "CARGO_HOME",
+        "RUSTUP_TOOLCHAIN",
+        "RUSTC",
+        "RUSTDOC",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "NIX_SSL_CERT_FILE",
+    ] {
+        if let Some(value) = std::env::var_os(variable) {
+            command.env(variable, value);
+        }
+    }
+    if std::env::var_os("RUSTUP_HOME").is_none() {
+        for variable in ["HOME", "USERPROFILE"] {
+            let Some(home) = std::env::var_os(variable) else {
+                continue;
+            };
+            let rustup_home = Path::new(&home).join(".rustup");
+            if rustup_home.is_dir() {
+                command.env("RUSTUP_HOME", rustup_home);
+                break;
+            }
+        }
+    }
+    copy_platform_toolchain_environment(command);
+}
+
+#[cfg(windows)]
+fn copy_platform_toolchain_environment(command: &mut Command) {
+    for variable in [
+        "SystemRoot",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "INCLUDE",
+        "LIB",
+        "LIBPATH",
+        "VCINSTALLDIR",
+        "VCToolsInstallDir",
+        "VCToolsRedistDir",
+        "VSINSTALLDIR",
+        "WindowsSdkDir",
+        "WindowsSDKVersion",
+        "UniversalCRTSdkDir",
+        "UCRTVersion",
+    ] {
         if let Some(value) = std::env::var_os(variable) {
             command.env(variable, value);
         }
     }
 }
+
+#[cfg(not(windows))]
+fn copy_platform_toolchain_environment(_: &mut Command) {}
 
 pub(crate) async fn force_remove_container(name: &str) {
     let mut command = Command::new("docker");
