@@ -7,10 +7,13 @@ use tokio::process::Command;
 
 use forgetest_core::results::{ClippyResult, CompilerDiagnostic, DiagnosticLevel, DiagnosticSpan};
 
-use crate::sandbox::Sandbox;
+use crate::cargo_project::CargoProject;
+use crate::repository_grader::{configure_process_group, run_bounded};
 
-/// Run clippy on the code in the sandbox.
-pub async fn run_clippy(sandbox: &Sandbox) -> Result<ClippyResult> {
+const MAX_OUTPUT_BYTES: usize = 4 * 1024 * 1024;
+
+/// Run clippy on the code in the temporary project.
+pub async fn run_clippy(sandbox: &CargoProject) -> Result<ClippyResult> {
     let mut cmd = Command::new("cargo");
     cmd.arg("clippy")
         .arg("--message-format=json")
@@ -19,16 +22,14 @@ pub async fn run_clippy(sandbox: &Sandbox) -> Result<ClippyResult> {
         .arg("clippy::all")
         .current_dir(sandbox.work_dir())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    sandbox.configure_command(&mut cmd);
+    configure_process_group(&mut cmd);
 
-    for (key, val) in sandbox.build_env() {
-        cmd.env(&key, &val);
-    }
-
-    let result = tokio::time::timeout(sandbox.timeout(), cmd.output())
+    let result = run_bounded(cmd, sandbox.timeout(), MAX_OUTPUT_BYTES)
         .await
-        .context("clippy timed out")?
-        .context("failed to run cargo clippy")?;
+        .context("failed to run bounded cargo clippy")?;
 
     let stdout = String::from_utf8_lossy(&result.stdout);
     let warnings = parse_clippy_output(&stdout);
@@ -41,7 +42,7 @@ pub async fn run_clippy(sandbox: &Sandbox) -> Result<ClippyResult> {
 }
 
 /// Parse clippy JSON output into diagnostics.
-fn parse_clippy_output(output: &str) -> Vec<CompilerDiagnostic> {
+pub(crate) fn parse_clippy_output(output: &str) -> Vec<CompilerDiagnostic> {
     let mut warnings = Vec::new();
 
     for line in output.lines() {

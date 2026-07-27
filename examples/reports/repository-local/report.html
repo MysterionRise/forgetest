@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>forgetest evidence - forgetest Repository Demo</title>
+<style>
+
+:root { --bg: #fff; --fg: #1a1a1a; --border: #e5e7eb; --pass: #dcfce7; --fail: #fde2e2; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111827; --fg: #f9fafb; --border: #374151; --pass: #064e3b; --fail: #7f1d1d; }
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 2rem; background: var(--bg); color: var(--fg); }
+h1, h2 { margin-top: 2rem; }
+.meta { color: #6b7280; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid var(--border); padding: 0.5rem 1rem; text-align: left; }
+th { background: var(--border); cursor: pointer; }
+.pass { background: var(--pass); }
+.fail { background: var(--fail); }
+pre { overflow-x: auto; padding: 1rem; background: var(--border); border-radius: 8px; }
+code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85rem; }
+details { margin: 1rem 0; }
+summary { cursor: pointer; font-weight: bold; }
+svg { margin: 1rem 0; }
+
+body { max-width: 1440px; margin: 0 auto; }
+section { margin: 2rem 0; }
+.provenance { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); }
+.provenance div { background: var(--bg); padding: 0.75rem; min-width: 0; }
+.provenance dt { color: #6b7280; font-size: 0.8rem; margin-bottom: 0.35rem; }
+.provenance dd { margin: 0; overflow-wrap: anywhere; }
+.status { display: inline-block; padding: 0.15rem 0.45rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+.status-pass { background: #dcfce7; color: #166534; }
+.status-fail { background: #fee2e2; color: #991b1b; }
+.status-error { background: #fef3c7; color: #92400e; }
+.status-timeout { background: #e0e7ff; color: #3730a3; }
+.timeline { padding-left: 1.5rem; }
+.timeline li { margin: 0.4rem 0; }
+.timeline time { color: #6b7280; font-family: monospace; margin-right: 0.5rem; }
+@media (max-width: 720px) {
+  body { padding: 1rem; }
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+}
+</style>
+</head>
+<body>
+<header>
+<h1>forgetest agent evidence</h1>
+<p class="meta">Suite: <strong>forgetest Repository Demo</strong> | 1 trials | offline-demo | 2026-07-27 18:13:37 UTC</p>
+</header>
+<section>
+<h2>Provenance</h2>
+<dl class="provenance"><div><dt>Suite digest</dt><dd><code>b145d541331a11a5768dd294b829d59d58fca9b7b33bb7144497d8c16c1d8904</code></dd></div><div><dt>Policy digest</dt><dd><code>951d79ff772b19ec43e5f63f444dba5d53ceb41b24a9814d0f301923c1a74137</code></dd></div><div><dt>Agent environment</dt><dd><code>host-trusted</code></dd></div><div><dt>Verifier environment</dt><dd><code>local</code></dd></div><div><dt>Verifier image</dt><dd><code>not recorded</code></dd></div><div><dt>Verifier network</dt><dd><code>agent=none;verifier=host-trusted</code></dd></div><div><dt>Publication status</dt><dd><code>redacted public artifact</code></dd></div></dl>
+</section>
+<section>
+<h2>Reliability</h2>
+<table><thead><tr><th>Agent</th><th>Resolved</th><th>Observed rate</th><th>95% CI</th><th>Pass@1</th><th>Pass^3</th><th>Infrastructure errors</th><th>Cost</th></tr></thead><tbody>
+<tr><td>scripted/deterministic-repository-demo@0.1.0#410c1f3a024b2e30aecc3f40ad374a5ccf2c9764cb9211862957ebc9ff384866</td><td>1/1</td><td>100.0%</td><td>20.7% to 100.0%</td><td>100.0%</td><td>0.0%</td><td>0</td><td>$0.0000</td></tr>
+</tbody></table>
+</section>
+<section>
+<h2>Trial matrix</h2>
+<table id="results"><thead><tr><th>Task</th><th>Agent</th><th>Trial</th><th>Status</th><th>Files</th><th>Duration</th></tr></thead><tbody>
+<tr><td>fix-add</td><td>scripted/deterministic-repository-demo@0.1.0#410c1f3a024b2e30aecc3f40ad374a5ccf2c9764cb9211862957ebc9ff384866</td><td>1</td><td><span class="status status-pass">passed</span></td><td>1</td><td>1784ms</td></tr>
+</tbody></table>
+</section>
+<section>
+<h2>Trial evidence</h2>
+<details><summary>fix-add / scripted/deterministic-repository-demo@0.1.0#410c1f3a024b2e30aecc3f40ad374a5ccf2c9764cb9211862957ebc9ff384866 / trial 1 - passed</summary>
+<h3>Timeline</h3><ol class="timeline">
+<li><time>18:13:35.591</time> <strong>Started</strong> started</li>
+<li><time>18:13:35.591</time> <strong>ToolResult</strong> tool_result</li>
+<li><time>18:13:35.591</time> <strong>Completed</strong> completed</li>
+</ol>
+<h3>Grader evidence</h3><table><thead><tr><th>Check</th><th>Kind</th><th>Result</th><th>Details</th></tr></thead><tbody><tr><td>verifier command</td><td>Other</td><td>pass</td><td>exit_code=Some(0); stdout_bytes=274; stderr_bytes=954</td></tr></tbody></table>
+<pre><code>== verifier command ==
+   Compiling forgetest-demo-repository v0.1.0 (/private$OUTPUT/raw/trials/2776d016-0417-4cb8-97e4-694bdd0d5594/verifier-workspace)
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: warning: confstr() failed with code 5: couldn&#x27;t get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+
+warning: `forgetest-demo-repository` (lib test) generated 1 warning
+warning: `forgetest-demo-repository` (test &quot;hidden&quot;) generated 1 warning (1 duplicate)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.05s
+     Running unittests src/lib.rs ($OUTPUT/raw/trials/2776d016-0417-4cb8-97e4-694bdd0d5594/verifier-workspace/target-check-0/debug/deps/forgetest_demo_repository-eaf1022392f96aa4)
+     Running tests/hidden.rs ($OUTPUT/raw/trials/2776d016-0417-4cb8-97e4-694bdd0d5594/verifier-workspace/target-check-0/debug/deps/hidden-39de37f596538c45)
+</code></pre>
+<h3>Patch</h3><pre><code>diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,1 +1,1 @@
+-pub fn add(a: i32, b: i32) -&gt; i32 { a - b }
++pub fn add(a: i32, b: i32) -&gt; i32 { a + b }
+</code></pre>
+</details>
+</section>
+<section><details><summary>Raw report JSON</summary><pre><code>{
+  &quot;schema_version&quot;: 2,
+  &quot;id&quot;: &quot;fbfb7e8e-05a4-4db8-9b3c-b0adadb7779c&quot;,
+  &quot;created_at&quot;: &quot;2026-07-27T18:13:37.375515Z&quot;,
+  &quot;suite&quot;: {
+    &quot;id&quot;: &quot;forgetest-repository-demo&quot;,
+    &quot;name&quot;: &quot;forgetest Repository Demo&quot;,
+    &quot;digest&quot;: &quot;b145d541331a11a5768dd294b829d59d58fca9b7b33bb7144497d8c16c1d8904&quot;,
+    &quot;task_digests&quot;: {
+      &quot;fix-add&quot;: &quot;9ad170e02e5fb910ae8322b0c72c85e09eca92dfd7ab215d9ff6a064f18c0f71&quot;
+    }
+  },
+  &quot;policy&quot;: {
+    &quot;schema_version&quot;: 1,
+    &quot;profile&quot;: &quot;offline-demo&quot;,
+    &quot;agent_environment&quot;: &quot;host-trusted&quot;,
+    &quot;verifier_environment&quot;: &quot;local&quot;,
+    &quot;verifier_image&quot;: null,
+    &quot;network&quot;: &quot;agent=none;verifier=host-trusted&quot;,
+    &quot;parameters&quot;: {
+      &quot;trials&quot;: 1,
+      &quot;parallelism&quot;: 1,
+      &quot;agent_images&quot;: {},
+      &quot;agent_timeout_secs&quot;: 60,
+      &quot;max_agent_output_bytes&quot;: 1048576,
+      &quot;max_agent_tokens&quot;: null,
+      &quot;max_agent_cost_usd&quot;: null,
+      &quot;agent_retries&quot;: 0,
+      &quot;max_workspace_files&quot;: 10000,
+      &quot;max_workspace_bytes&quot;: 67108864,
+      &quot;max_patch_bytes&quot;: 4194304,
+      &quot;verifier_max_output_bytes&quot;: 1048576,
+      &quot;agent_container&quot;: null,
+      &quot;verifier_container&quot;: null
+    },
+    &quot;digest&quot;: &quot;951d79ff772b19ec43e5f63f444dba5d53ceb41b24a9814d0f301923c1a74137&quot;
+  },
+  &quot;agents&quot;: [
+    {
+      &quot;adapter&quot;: &quot;scripted&quot;,
+      &quot;adapter_version&quot;: &quot;0.1.0&quot;,
+      &quot;executable_sha256&quot;: null,
+      &quot;model&quot;: &quot;deterministic-repository-demo&quot;,
+      &quot;configuration_digest&quot;: &quot;410c1f3a024b2e30aecc3f40ad374a5ccf2c9764cb9211862957ebc9ff384866&quot;
+    }
+  ],
+  &quot;trials&quot;: [
+    {
+      &quot;id&quot;: &quot;2776d016-0417-4cb8-97e4-694bdd0d5594&quot;,
+      &quot;task_id&quot;: &quot;fix-add&quot;,
+      &quot;task_digest&quot;: &quot;9ad170e02e5fb910ae8322b0c72c85e09eca92dfd7ab215d9ff6a064f18c0f71&quot;,
+      &quot;agent&quot;: {
+        &quot;adapter&quot;: &quot;scripted&quot;,
+        &quot;adapter_version&quot;: &quot;0.1.0&quot;,
+        &quot;executable_sha256&quot;: null,
+        &quot;model&quot;: &quot;deterministic-repository-demo&quot;,
+        &quot;configuration_digest&quot;: &quot;410c1f3a024b2e30aecc3f40ad374a5ccf2c9764cb9211862957ebc9ff384866&quot;
+      },
+      &quot;environment_digest&quot;: &quot;45e5c490f561909055e6882129dda2f85170af9e3c7d559afe2c13644d39ee71&quot;,
+      &quot;trial_index&quot;: 1,
+      &quot;agent_attempts&quot;: 1,
+      &quot;status&quot;: &quot;passed&quot;,
+      &quot;changed_files&quot;: [
+        {
+          &quot;path&quot;: &quot;src/lib.rs&quot;,
+          &quot;kind&quot;: &quot;modified&quot;,
+          &quot;before_sha256&quot;: &quot;b246c32753683c489f445af5ddc91a63fa3bd1e75dcf769c2599c19c2505fb92&quot;,
+          &quot;after_sha256&quot;: &quot;a33db20869249b28af01c8e0cde00b70a603f5aa4bb715aae2044b84dbdd9c8e&quot;
+        }
+      ],
+      &quot;patch&quot;: &quot;diff --git a/src/lib.rs b/src/lib.rs\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1,1 +1,1 @@\n-pub fn add(a: i32, b: i32) -&gt; i32 { a - b }\n+pub fn add(a: i32, b: i32) -&gt; i32 { a + b }\n&quot;,
+      &quot;grader&quot;: {
+        &quot;success&quot;: true,
+        &quot;exit_code&quot;: 0,
+        &quot;stdout&quot;: &quot;== verifier command ==\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 1 test\ntest handles_positive_and_negative_values ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n&quot;,
+        &quot;stderr&quot;: &quot;== verifier command ==\n   Compiling forgetest-demo-repository v0.1.0 (/private$OUTPUT/raw/trials/2776d016-0417-4cb8-97e4-694bdd0d5594/verifier-workspace)\nwarning: output of `xcrun` while finding MacOSX.sdk\n  |\n  = note: xcrun: warning: confstr() failed with code 5: couldn&#x27;t get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n\nwarning: `forgetest-demo-repository` (lib test) generated 1 warning\nwarning: `forgetest-demo-repository` (test \&quot;hidden\&quot;) generated 1 warning (1 duplicate)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.05s\n     Running unittests src/lib.rs ($OUTPUT/raw/trials/2776d016-0417-4cb8-97e4-694bdd0d5594/verifier-workspace/target-check-0/debug/deps/forgetest_demo_repository-eaf1022392f96aa4)\n     Running tests/hidden.rs ($OUTPUT/raw/trials/2776d016-0417-4cb8-97e4-694bdd0d5594/verifier-workspace/target-check-0/debug/deps/hidden-39de37f596538c45)\n&quot;,
+        &quot;duration_ms&quot;: 1779,
+        &quot;checks&quot;: [
+          {
+            &quot;name&quot;: &quot;verifier command&quot;,
+            &quot;kind&quot;: &quot;other&quot;,
+            &quot;passed&quot;: true,
+            &quot;details&quot;: &quot;exit_code=Some(0); stdout_bytes=274; stderr_bytes=954&quot;
+          }
+        ]
+      },
+      &quot;events&quot;: [
+        {
+          &quot;sequence&quot;: 1,
+          &quot;timestamp&quot;: &quot;2026-07-27T18:13:35.591413Z&quot;,
+          &quot;kind&quot;: &quot;started&quot;,
+          &quot;message&quot;: &quot;started&quot;,
+          &quot;raw&quot;: null
+        },
+        {
+          &quot;sequence&quot;: 2,
+          &quot;timestamp&quot;: &quot;2026-07-27T18:13:35.591772Z&quot;,
+          &quot;kind&quot;: &quot;tool_result&quot;,
+          &quot;message&quot;: &quot;tool_result&quot;,
+          &quot;raw&quot;: null
+        },
+        {
+          &quot;sequence&quot;: 3,
+          &quot;timestamp&quot;: &quot;2026-07-27T18:13:35.591800Z&quot;,
+          &quot;kind&quot;: &quot;completed&quot;,
+          &quot;message&quot;: &quot;completed&quot;,
+          &quot;raw&quot;: null
+        }
+      ],
+      &quot;usage&quot;: {
+        &quot;input_tokens&quot;: 0,
+        &quot;output_tokens&quot;: 0,
+        &quot;cached_tokens&quot;: 0,
+        &quot;estimated_cost_usd&quot;: 0.0
+      },
+      &quot;duration_ms&quot;: 1784,
+      &quot;termination_reason&quot;: &quot;completed&quot;,
+      &quot;artifacts&quot;: {},
+      &quot;error&quot;: null
+    }
+  ],
+  &quot;aggregate&quot;: {
+    &quot;per_agent&quot;: {
+      &quot;scripted/deterministic-repository-demo@0.1.0#410c1f3a024b2e30aecc3f40ad374a5ccf2c9764cb9211862957ebc9ff384866&quot;: {
+        &quot;scheduled&quot;: 1,
+        &quot;passed&quot;: 1,
+        &quot;failed&quot;: 0,
+        &quot;task_failures&quot;: 0,
+        &quot;agent_errors&quot;: 0,
+        &quot;environment_errors&quot;: 0,
+        &quot;grader_errors&quot;: 0,
+        &quot;timeouts&quot;: 0,
+        &quot;cancelled&quot;: 0,
+        &quot;infrastructure_errors&quot;: 0,
+        &quot;observed_resolution_rate&quot;: 1.0,
+        &quot;valid_trial_resolution_rate&quot;: 1.0,
+        &quot;wilson_95_low&quot;: 0.20654931437723745,
+        &quot;wilson_95_high&quot;: 1.0,
+        &quot;pass_at_1&quot;: 1.0,
+        &quot;pass_power_3&quot;: 0.0,
+        &quot;total_cost_usd&quot;: 0.0,
+        &quot;total_duration_ms&quot;: 1784
+      }
+    },
+    &quot;pairwise&quot;: []
+  },
+  &quot;redaction&quot;: {
+    &quot;redacted&quot;: true,
+    &quot;redacted_at&quot;: &quot;2026-07-27T18:13:37.549748Z&quot;,
+    &quot;rules_version&quot;: &quot;1&quot;,
+    &quot;replacements&quot;: 10
+  },
+  &quot;duration_ms&quot;: 1785
+}</code></pre></details></section>
+</body>
+</html>

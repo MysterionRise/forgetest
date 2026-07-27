@@ -13,7 +13,7 @@ use crate::model::Expectations;
 pub struct EvalResult {
     /// The eval case ID this result is for.
     pub case_id: String,
-    /// The model used (e.g. "claude-sonnet-4-20250514").
+    /// The exact provider model identifier used.
     pub model: String,
     /// The provider used (e.g. "anthropic").
     pub provider: String,
@@ -31,10 +31,32 @@ pub struct EvalResult {
     pub timing: TimingInfo,
     /// Token usage for this generation.
     pub token_usage: TokenUsage,
+    /// Score computed with the eval case expectations at run time.
+    #[serde(default)]
+    pub score: Option<Score>,
+    /// Execution status for this scheduled result.
+    #[serde(default)]
+    pub status: EvalResultStatus,
+    /// Provider or runner error when execution did not complete normally.
+    #[serde(default)]
+    pub error: Option<String>,
     /// Which attempt this is (for Pass@k sampling).
     pub attempt: u32,
     /// Unique run identifier.
     pub run_id: Uuid,
+}
+
+/// Execution status for a legacy snippet evaluation.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EvalResultStatus {
+    /// Generation and grading completed, regardless of whether the code passed.
+    #[default]
+    Completed,
+    /// The model provider failed before producing a completion.
+    ProviderError,
+    /// The compile/test runner failed to execute.
+    RunnerError,
 }
 
 /// Result of compiling generated code.
@@ -179,7 +201,7 @@ impl Score {
     /// Scoring:
     /// - Compilation: 1.0 if succeeded, 0.0 if failed
     /// - Tests: ratio of passed / total (0.0 if no tests run)
-    /// - Clippy: 1.0 - 0.1 per warning, capped at 0.0
+    /// - Clippy: 1.0 - 0.1 per warning above the configured allowance
     /// - Structure: fraction of expected_functions and expected_types found
     /// - Overall: weighted average (compilation 30%, tests 45%, structure 15%, clippy 10%)
     ///
@@ -205,7 +227,11 @@ impl Score {
         };
 
         let clippy = match &result.clippy {
-            Some(clippy_result) => (1.0 - clippy_result.warning_count as f64 * 0.1).max(0.0),
+            Some(clippy_result) => {
+                let allowed = expectations.max_clippy_warnings.unwrap_or(0);
+                let excess = clippy_result.warning_count.saturating_sub(allowed);
+                (1.0 - excess as f64 * 0.1).max(0.0)
+            }
             None => 1.0,
         };
 
@@ -318,6 +344,9 @@ mod tests {
                 total_tokens: 300,
                 estimated_cost_usd: 0.01,
             },
+            score: None,
+            status: EvalResultStatus::Completed,
+            error: None,
             attempt: 1,
             run_id: Uuid::nil(),
         }
@@ -362,6 +391,23 @@ mod tests {
         let result = make_result(true, 5, 0, 15);
         let score = Score::compute(&result, &Expectations::default());
         assert_eq!(score.clippy, 0.0);
+    }
+
+    #[test]
+    fn clippy_allowance_penalizes_only_warnings_over_limit() {
+        let expectations = Expectations {
+            max_clippy_warnings: Some(2),
+            ..Expectations::default()
+        };
+
+        assert_eq!(
+            Score::compute(&make_result(true, 5, 0, 2), &expectations).clippy,
+            1.0
+        );
+        assert_eq!(
+            Score::compute(&make_result(true, 5, 0, 3), &expectations).clippy,
+            0.9
+        );
     }
 
     #[test]

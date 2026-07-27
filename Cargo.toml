@@ -4,6 +4,7 @@ members = [
     "crates/forgetest-runner",
     "crates/forgetest-providers",
     "crates/forgetest-report",
+    "crates/forgetest-agents",
     "crates/forgetest-cli",
 ]
 resolver = "2"
@@ -11,6 +12,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.92"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/MysterionRise/forgetest"
 keywords = ["llm", "eval", "benchmark", "testing", "ai"]
@@ -41,6 +43,9 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 tempfile = "3"
 reqwest = { version = "0.12", features = ["json"] }
+sha2 = "0.10"
+libc = "0.2"
+regex = "1"
 # CLI
 clap = { version = "4", features = ["derive"] }
 comfy-table = "7"
@@ -58,4 +63,5 @@ forgetest-core = { version = "0.1.0", path = "crates/forgetest-core" }
 forgetest-runner = { version = "0.1.0", path = "crates/forgetest-runner" }
 forgetest-providers = { version = "0.1.0", path = "crates/forgetest-providers" }
 forgetest-report = { version = "0.1.0", path = "crates/forgetest-report" }
+forgetest-agents = { version = "0.1.0", path = "crates/forgetest-agents" }
 forgetest-cli = { version = "0.1.0", path = "crates/forgetest-cli" }

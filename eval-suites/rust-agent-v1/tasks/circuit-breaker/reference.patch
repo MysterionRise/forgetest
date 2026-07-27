@@ -1,0 +1,15 @@
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -14,7 +14,10 @@ impl CircuitBreaker {
+         }
+     }
+ 
+-    pub fn record_failure(&mut self) {}
++    pub fn record_failure(&mut self) {
++        self.failures = self.failures.saturating_add(1);
++        self.open = self.failures >= self.threshold.max(1);
++    }
+ 
+     pub fn record_success(&mut self) {
+         self.failures = 0;

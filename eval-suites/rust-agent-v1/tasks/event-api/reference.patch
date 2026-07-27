@@ -1,0 +1,25 @@
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,12 +1,19 @@
+ #[derive(Debug, Clone, PartialEq, Eq)]
++pub enum Severity {
++    Info,
++    Warning,
++    Error,
++}
++
++#[derive(Debug, Clone, PartialEq, Eq)]
+ pub enum Event {
+-    Message(String),
++    Message { text: String, severity: Severity },
+     Completed,
+ }
+ 
+ pub fn message_text(event: &Event) -> Option<&str> {
+     match event {
+-        Event::Message(text) => Some(text),
++        Event::Message { text, .. } => Some(text),
+         Event::Completed => None,
+     }
+ }

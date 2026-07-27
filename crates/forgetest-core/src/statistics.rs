@@ -127,8 +127,9 @@ pub struct ModelStats {
     pub total_tokens: u64,
     /// Total estimated cost in USD.
     pub total_cost_usd: f64,
-    /// Average latency in milliseconds.
-    pub avg_latency_ms: u64,
+    /// Average end-to-end trial duration in milliseconds.
+    #[serde(alias = "avg_latency_ms")]
+    pub avg_trial_duration_ms: u64,
 }
 
 /// Statistics for a single eval case across all models.
@@ -168,29 +169,30 @@ pub fn compute_aggregate_stats(
 
         let test_pass_rate = model_res
             .iter()
-            .filter_map(|r| {
-                r.test_execution.as_ref().map(|t| {
-                    let total = t.passed + t.failed;
-                    if total == 0 {
-                        0.0
-                    } else {
-                        t.passed as f64 / total as f64
-                    }
-                })
+            .map(|result| {
+                case_expectations
+                    .get(result.case_id.as_str())
+                    .map(|expectations| {
+                        result
+                            .score
+                            .as_ref()
+                            .map(|score| score.tests)
+                            .unwrap_or_else(|| Score::compute(result, expectations).tests)
+                    })
+                    .unwrap_or(0.0)
             })
             .sum::<f64>()
-            / model_res
-                .iter()
-                .filter(|r| r.test_execution.is_some())
-                .count()
-                .max(1) as f64;
+            / n;
 
         let clippy_score = model_res
             .iter()
             .filter_map(|r| {
-                r.clippy
-                    .as_ref()
-                    .map(|c| (1.0 - c.warning_count as f64 * 0.1).max(0.0))
+                r.clippy.as_ref()?;
+                r.score.as_ref().map(|score| score.clippy).or_else(|| {
+                    case_expectations
+                        .get(r.case_id.as_str())
+                        .map(|expectations| Score::compute(r, expectations).clippy)
+                })
             })
             .sum::<f64>()
             / model_res
@@ -209,7 +211,7 @@ pub fn compute_aggregate_stats(
             .map(|r| r.token_usage.estimated_cost_usd)
             .sum();
 
-        let avg_latency = model_res.iter().map(|r| r.timing.total_ms).sum::<u64>()
+        let avg_trial_duration = model_res.iter().map(|r| r.timing.total_ms).sum::<u64>()
             / model_res.len().max(1) as u64;
 
         // Aggregate Pass@k for this model
@@ -238,7 +240,7 @@ pub fn compute_aggregate_stats(
                 avg_clippy_score: clippy_score,
                 total_tokens,
                 total_cost_usd: total_cost,
-                avg_latency_ms: avg_latency,
+                avg_trial_duration_ms: avg_trial_duration,
             },
         );
     }
@@ -290,6 +292,28 @@ pub fn compute_aggregate_stats(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::{EvalCase, Expectations, Language};
+    use crate::results::{CompilationResult, EvalResultStatus, TimingInfo, TokenUsage};
+    use uuid::Uuid;
+
+    #[test]
+    fn model_stats_reads_legacy_latency_but_writes_trial_duration() {
+        let stats: ModelStats = serde_json::from_value(serde_json::json!({
+            "model": "model",
+            "pass_at_k": {},
+            "avg_compilation_rate": 1.0,
+            "avg_test_pass_rate": 1.0,
+            "avg_clippy_score": 1.0,
+            "total_tokens": 10,
+            "total_cost_usd": 0.1,
+            "avg_latency_ms": 42
+        }))
+        .unwrap();
+
+        let serialized = serde_json::to_value(stats).unwrap();
+        assert_eq!(serialized["avg_trial_duration_ms"], 42);
+        assert!(serialized.get("avg_latency_ms").is_none());
+    }
 
     #[test]
     fn pass_at_k_all_success() {
@@ -327,5 +351,77 @@ mod tests {
     #[test]
     fn pass_at_k_edge_n_zero() {
         assert_eq!(pass_at_k(0, 0, 1), 0.0);
+    }
+
+    #[test]
+    fn aggregate_test_rate_includes_scheduled_execution_errors() {
+        let set = EvalSet {
+            id: "set".into(),
+            name: "Set".into(),
+            description: String::new(),
+            cases: vec![EvalCase {
+                id: "case".into(),
+                name: "Case".into(),
+                description: String::new(),
+                prompt: "Prompt".into(),
+                language: Some(Language::Rust),
+                context: Vec::new(),
+                expectations: Expectations::default(),
+                tags: Vec::new(),
+                dependencies: Vec::new(),
+                timeout_secs: None,
+                max_tokens: None,
+            }],
+            default_language: Language::Rust,
+            default_timeout_secs: 60,
+        };
+        let base = |status, tests| EvalResult {
+            case_id: "case".into(),
+            model: "model".into(),
+            provider: "provider".into(),
+            generated_code: String::new(),
+            compilation: CompilationResult {
+                success: status == EvalResultStatus::Completed,
+                errors: Vec::new(),
+                warnings: Vec::new(),
+                duration_ms: 0,
+            },
+            test_execution: tests,
+            clippy: None,
+            timing: TimingInfo {
+                llm_request_ms: 0,
+                compilation_ms: 0,
+                test_execution_ms: 0,
+                total_ms: 0,
+            },
+            token_usage: TokenUsage {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0,
+                estimated_cost_usd: 0.0,
+            },
+            score: None,
+            status,
+            error: None,
+            attempt: 1,
+            run_id: Uuid::nil(),
+        };
+        let results = vec![
+            base(
+                EvalResultStatus::Completed,
+                Some(crate::results::TestResult {
+                    passed: 1,
+                    failed: 0,
+                    ignored: 0,
+                    duration_ms: 0,
+                    failures: Vec::new(),
+                }),
+            ),
+            base(EvalResultStatus::ProviderError, None),
+        ];
+
+        let aggregate = compute_aggregate_stats(&results, &set, &[1]);
+
+        assert_eq!(aggregate.per_model["model"].avg_test_pass_rate, 0.5);
     }
 }

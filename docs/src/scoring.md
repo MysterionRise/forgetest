@@ -1,111 +1,81 @@
-# Scoring
+# Outcomes and Statistics
 
-forgetest uses a multi-component scoring system to evaluate LLM-generated code quality.
+## Repository Tasks
 
-## Score Components
+Repository tasks use a binary primary outcome. A trial passes only when every
+required named verifier check succeeds after the agent patch is applied to a
+fresh workspace.
 
-Each eval result receives a score from 0.0 to 1.0 composed of four weighted components:
+Checks normally include:
 
-| Component | Weight | Description |
-|-----------|--------|-------------|
-| **Compilation** | 30% | Does the code compile without errors? Binary: 0 or 1. |
-| **Tests** | 45% | Fraction of test cases that pass: `passed / (passed + failed)`. |
-| **Structure** | 15% | Fraction of expected functions/types found in generated code. |
-| **Clippy** | 10% | Penalty for clippy warnings: `max(0, 1 - warnings * 0.1)`. |
+- `fail_to_pass`: behavior that is broken in the visible workspace and must be
+  fixed.
+- `pass_to_pass`: existing behavior that must remain working.
+- Optional deterministic compile or Clippy checks.
 
-### Score Formula
+A null patch must fail calibration. The trusted reference patch must pass all
+checks. Weighted partial credit does not turn a broken repository patch into a
+pass.
 
-```
-if compilation fails:
-    overall = 0.0
-else:
-    test_score = passed / (passed + failed)    # 0.0 if no tests
-    structure_score = found / expected          # 1.0 if none expected
-    clippy_score = max(0.0, 1.0 - warnings * 0.1)
-    overall = compilation * 0.3 + test_score * 0.45 + structure_score * 0.15 + clippy_score * 0.1
-```
+## Status Accounting
 
-Key behaviors:
+Task failures, agent failures, timeouts, verifier failures, and environment
+failures are distinct. Reports expose both:
 
-- **Compilation failure zeroes everything** — if the code doesn't compile, the score is 0.0 regardless of other factors.
-- **Tests dominate** — the 45% weight means test pass rate is the most important factor.
-- **Structure checks** — verifying expected functions/types are present accounts for 15%.
-- **Clippy is a bonus** — clean code gets 10%, each warning deducts 1%.
-- **A perfect score is 1.0** — compiles (0.3) + all tests pass (0.45) + all expected symbols found (0.15) + no clippy warnings (0.1).
+- Observed resolution rate over every scheduled trial.
+- Valid-trial resolution rate excluding infrastructure errors and cancellation.
 
-## Pass@k
+Agent process errors and timeouts remain agent outcomes, not infrastructure
+exclusions.
 
-Pass@k answers: "If I sample k code generations, what's the probability that at least one is correct?"
+## Confidence Intervals
 
-forgetest uses the **unbiased estimator** from the [Codex paper](https://arxiv.org/abs/2107.03374) (Chen et al., 2021):
+For each exact agent identity, reports include a Wilson 95% interval around the
+observed pass rate. This is more informative than a bare percentage for a small
+task corpus.
 
-```
+The interval describes uncertainty in the observed binomial rate. It does not
+make the 12 tasks representative of all Rust engineering work.
+
+## Reliability Metrics
+
+- `pass@1`: fraction of tasks whose first trial passed.
+- `pass^3`: fraction of tasks where the first three trials all passed.
+
+`pass^3` is deliberately strict. It answers whether an agent configuration is
+reliably successful across three attempts, not whether any one attempt worked.
+
+## Paired Comparison
+
+When two agents share tasks, `forgetest` computes task-level resolution-rate
+differences and a deterministic paired bootstrap 95% interval for
+`agent B - agent A`. Pairing controls for task difficulty better than comparing
+two unrelated aggregate percentages.
+
+The bootstrap uses 10,000 deterministic resamples. A dated study should publish
+the point estimate, interval, task count, raw status counts, costs, and
+infrastructure failures.
+
+## Legacy Snippet Score
+
+Function-level snippet reports retain the original diagnostic score:
+
+| Component | Weight |
+|---|---:|
+| Compilation | 30% |
+| Tests | 45% |
+| Structure | 15% |
+| Clippy | 10% |
+
+Compilation failure sets the overall score to zero. New reports persist the
+score computed with the original expectations. Old reports remain readable and
+fall back to score recomputation.
+
+Legacy snippet Pass@k uses the unbiased estimator:
+
+```text
 Pass@k = 1 - C(n-c, k) / C(n, k)
 ```
 
-Where:
-
-- `n` = total number of samples generated
-- `c` = number of correct (passing) samples
-- `k` = the k in Pass@k
-
-This is computed in log-space to avoid numerical overflow with large values.
-
-### Interpreting Pass@k
-
-| Metric | Meaning |
-|--------|---------|
-| Pass@1 | Probability of getting correct code on the first try |
-| Pass@5 | Probability that at least 1 of 5 samples is correct |
-| Pass@10 | Probability that at least 1 of 10 samples is correct |
-
-### Running with multiple samples
-
-To compute Pass@5, you need at least 5 samples per case:
-
-```bash
-forgetest run --eval-set eval-sets/rust-basics.toml --pass-k 1,5 --temperature 0.8
-```
-
-Note: Temperature > 0 is recommended when computing Pass@k > 1 to get diverse samples.
-
-## Regression Detection
-
-Compare two eval reports to detect score changes:
-
-```bash
-forgetest compare --baseline old-report.json --current new-report.json
-```
-
-A **regression** is detected when a case's score drops by more than the threshold (default: 5%). An **improvement** is when it increases by more than the threshold.
-
-```bash
-# Fail CI if any regressions are found
-forgetest compare --baseline baseline.json --current latest.json \
-  --fail-on-regression --threshold 0.05
-```
-
-Output formats:
-
-```bash
-forgetest compare --baseline a.json --current b.json --format text     # default
-forgetest compare --baseline a.json --current b.json --format json
-forgetest compare --baseline a.json --current b.json --format markdown
-```
-
-## Aggregate Statistics
-
-Reports include per-model and per-case aggregate statistics:
-
-### Per-Model Stats
-
-- **Pass@k** for each requested k value
-- **Average compilation rate** — fraction of samples that compile
-- **Average test pass rate** — average (passed/total) across cases
-- **Total cost** — sum of API costs
-- **Average latency** — mean LLM request time
-
-### Per-Case Stats
-
-- **Pass@k** per model
-- **Average score** across attempts
+Snippet aggregate timing is labeled average trial duration because it includes
+provider, compile, test, and Clippy work, not only model latency.

@@ -1,8 +1,9 @@
 [package]
 name = "forgetest-cli"
-description = "CLI binary for forgetest — LLM code-quality eval harness"
+description = "CLI for execution-backed Rust coding-agent evaluation"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 keywords.workspace = true
@@ -19,6 +20,7 @@ forgetest-core = { workspace = true }
 forgetest-runner = { workspace = true }
 forgetest-providers = { workspace = true }
 forgetest-report = { workspace = true }
+forgetest-agents = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
@@ -30,6 +32,8 @@ clap = { workspace = true }
 comfy-table = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+tempfile = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
@@ -38,3 +42,4 @@ tempfile = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
+wiremock = { workspace = true }

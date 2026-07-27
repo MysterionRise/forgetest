@@ -1,0 +1,23 @@
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,8 +1,15 @@
+-use std::path::{Path, PathBuf};
++use std::path::{Component, Path, PathBuf};
+ 
+ pub fn safe_join(root: &Path, requested: &Path) -> Result<PathBuf, String> {
+-    if requested.is_absolute() {
+-        return Err("absolute paths are not allowed".into());
++    let mut relative = PathBuf::new();
++    for component in requested.components() {
++        match component {
++            Component::Normal(part) => relative.push(part),
++            Component::CurDir => {}
++            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
++                return Err("path escapes the configured root".into());
++            }
++        }
+     }
+-    Ok(root.join(requested))
++    Ok(root.join(relative))
+ }

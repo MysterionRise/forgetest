@@ -1,0 +1,10 @@
+[package]
+name = "forgetest-runner-cache"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+tokio = { version = "=1.49.0", features = ["full"] }
+
+[workspace]

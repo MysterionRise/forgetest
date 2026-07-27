@@ -1,0 +1,39 @@
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -25,6 +25,33 @@ impl Filter {
+     }
+ }
+ 
+-pub fn parse_filter(_input: &str) -> Result<Filter, String> {
+-    Err("filter parsing is not implemented".into())
++pub fn parse_filter(input: &str) -> Result<Filter, String> {
++    let mut filter = Filter::new(Level::Info);
++    for raw in input.split(',') {
++        let directive = raw.trim();
++        if directive.is_empty() {
++            return Err("empty filter directive".into());
++        }
++        if let Some((target, level)) = directive.split_once('=') {
++            let target = target.trim().to_ascii_lowercase();
++            if target.is_empty() {
++                return Err("empty filter target".into());
++            }
++            filter.targets.insert(target, parse_level(level)?);
++        } else {
++            filter.default = parse_level(directive)?;
++        }
++    }
++    Ok(filter)
++}
++
++fn parse_level(value: &str) -> Result<Level, String> {
++    match value.trim().to_ascii_lowercase().as_str() {
++        "error" => Ok(Level::Error),
++        "warn" => Ok(Level::Warn),
++        "info" => Ok(Level::Info),
++        "debug" => Ok(Level::Debug),
++        "trace" => Ok(Level::Trace),
++        other => Err(format!("unknown level: {other}")),
++    }
+ }

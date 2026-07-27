@@ -16,14 +16,14 @@ use std::sync::Arc;
 
 use forgetest_core::engine::{EvalEngine, EvalEngineConfig, ModelSpec, NoopReporter};
 use forgetest_core::parser;
-use forgetest_providers::config::load_config;
+use forgetest_providers::config::load_config_from;
 use forgetest_providers::create_provider;
 use forgetest_runner::LocalRunner;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Load provider config from forgetest.toml
-    let config = load_config()?;
+    // Load the explicit project-local provider config.
+    let config = load_config_from(Some(std::path::Path::new("forgetest.toml")))?;
 
     // Parse an eval set from a TOML file
     let eval_set = parser::parse_eval_set("eval-sets/rust-basics.toml".as_ref())?;
@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    // Create the sandboxed code runner
+    // Local execution is for trusted code; use Docker for stronger isolation.
     let runner = Arc::new(LocalRunner::new(std::path::PathBuf::from(".forgetest-target")));
 
     let engine = EvalEngine::new(providers, runner, engine_config);
@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
     // Define which models to evaluate
     let models = vec![ModelSpec {
         provider: "anthropic".to_string(),
-        model: "claude-sonnet-4-20250514".to_string(),
+        model: "provider-model-id".to_string(),
     }];
 
     // Run the evaluation

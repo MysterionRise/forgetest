@@ -1,4 +1,4 @@
-//! Compilation runner for sandboxed Cargo projects.
+//! Compilation runner for temporary Cargo projects.
 
 use std::process::Stdio;
 use std::time::Instant;
@@ -10,10 +10,13 @@ use forgetest_core::results::{
     CompilationResult, CompilerDiagnostic, DiagnosticLevel, DiagnosticSpan,
 };
 
-use crate::sandbox::Sandbox;
+use crate::cargo_project::CargoProject;
+use crate::repository_grader::{configure_process_group, run_bounded};
 
-/// Compile the code in a sandbox.
-pub async fn compile(sandbox: &Sandbox) -> Result<CompilationResult> {
+const MAX_OUTPUT_BYTES: usize = 4 * 1024 * 1024;
+
+/// Compile the code in the temporary project.
+pub async fn compile(sandbox: &CargoProject) -> Result<CompilationResult> {
     let start = Instant::now();
 
     let mut cmd = Command::new("cargo");
@@ -21,16 +24,14 @@ pub async fn compile(sandbox: &Sandbox) -> Result<CompilationResult> {
         .arg("--message-format=json")
         .current_dir(sandbox.work_dir())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    sandbox.configure_command(&mut cmd);
+    configure_process_group(&mut cmd);
 
-    for (key, val) in sandbox.build_env() {
-        cmd.env(&key, &val);
-    }
-
-    let result = tokio::time::timeout(sandbox.timeout(), cmd.output())
+    let result = run_bounded(cmd, sandbox.timeout(), MAX_OUTPUT_BYTES)
         .await
-        .context("compilation timed out")?
-        .context("failed to run cargo build")?;
+        .context("failed to run bounded cargo build")?;
 
     let duration_ms = start.elapsed().as_millis() as u64;
     let stdout = String::from_utf8_lossy(&result.stdout);
@@ -46,7 +47,9 @@ pub async fn compile(sandbox: &Sandbox) -> Result<CompilationResult> {
 }
 
 /// Parse cargo's JSON output into diagnostics.
-fn parse_cargo_json_output(output: &str) -> (Vec<CompilerDiagnostic>, Vec<CompilerDiagnostic>) {
+pub(crate) fn parse_cargo_json_output(
+    output: &str,
+) -> (Vec<CompilerDiagnostic>, Vec<CompilerDiagnostic>) {
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
 
@@ -133,7 +136,7 @@ fn parse_cargo_json_output(output: &str) -> (Vec<CompilerDiagnostic>, Vec<Compil
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sandbox::Sandbox;
+    use crate::cargo_project::CargoProject;
     use forgetest_core::model::Language;
     use std::time::Duration;
 
@@ -141,7 +144,7 @@ mod tests {
     async fn compile_valid_code() {
         let target = tempfile::tempdir().unwrap();
         let sandbox =
-            Sandbox::new(Language::Rust, Duration::from_secs(120), target.path()).unwrap();
+            CargoProject::new(Language::Rust, Duration::from_secs(120), target.path()).unwrap();
         sandbox
             .write_source("pub fn add(a: i32, b: i32) -> i32 { a + b }")
             .unwrap();
@@ -155,7 +158,7 @@ mod tests {
     async fn compile_invalid_code() {
         let target = tempfile::tempdir().unwrap();
         let sandbox =
-            Sandbox::new(Language::Rust, Duration::from_secs(120), target.path()).unwrap();
+            CargoProject::new(Language::Rust, Duration::from_secs(120), target.path()).unwrap();
         sandbox
             .write_source("pub fn bad() -> i32 { \"not an int\" }")
             .unwrap();

@@ -50,6 +50,7 @@ mod tests {
 """
 expected_functions = ["fibonacci"] # Functions that must be defined
 expected_types = []                # Types/structs that must be defined
+max_clippy_warnings = 0             # Warnings allowed before penalty
 ```
 
 ## Writing Good Test Files
@@ -113,10 +114,15 @@ forgetest validate --eval-set my-evals.toml
 This checks for:
 
 - Valid TOML syntax
-- Required fields (`id`, `name`, `prompt`)
-- Duplicate case IDs
+- Unknown or misspelled fields
+- Non-empty required fields (`id`, `name`, `prompt`)
+- Duplicate case and eval-set IDs
+- Positive timeout and token limits
 - `should_pass_tests = true` without a `test_file`
-- Empty prompts
+- Unsupported languages and features
+
+`should_compile = false` and `custom_check` are rejected in v1 snippet files
+instead of being silently ignored.
 
 ## Organizing Eval Sets
 

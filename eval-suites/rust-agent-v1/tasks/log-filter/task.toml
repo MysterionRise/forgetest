@@ -1,0 +1,30 @@
+schema_version = 1
+id = "log-filter"
+name = "Add target-aware log filter parsing"
+description = "Implement a compact deterministic filter language."
+category = "feature"
+language = "rust"
+prompt = "prompt.md"
+workspace = "workspace"
+grader = "grader"
+reference_patch = "reference.patch"
+timeout_secs = 240
+tags = ["feature", "parser"]
+
+[verifier]
+timeout_secs = 60
+
+[[verifier.checks]]
+name = "filter parsing contract"
+kind = "fail_to_pass"
+command = ["cargo", "test", "--test", "hidden", "--locked"]
+
+[[verifier.checks]]
+name = "existing library tests"
+kind = "pass_to_pass"
+command = ["cargo", "test", "--lib", "--locked"]
+
+[provenance]
+kind = "authored"
+license = "MIT OR Apache-2.0"
+audited_at = "2026-07-27"

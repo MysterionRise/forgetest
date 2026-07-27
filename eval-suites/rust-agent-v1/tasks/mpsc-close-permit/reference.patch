@@ -1,0 +1,12 @@
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -27,7 +27,7 @@ impl ChannelState {
+         if self.queued > 0 {
+             self.queued -= 1;
+             TryRecv::Item
+-        } else if self.closed {
++        } else if self.closed && self.outstanding_permits == 0 {
+             TryRecv::Disconnected
+         } else {
+             TryRecv::Empty

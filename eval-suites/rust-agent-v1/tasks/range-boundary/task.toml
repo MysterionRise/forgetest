@@ -1,0 +1,30 @@
+schema_version = 1
+id = "range-boundary"
+name = "Fix exclusive range boundaries"
+description = "Correct an off-by-one bug in a chunk planner."
+category = "bug_fix"
+language = "rust"
+prompt = "prompt.md"
+workspace = "workspace"
+grader = "grader"
+reference_patch = "reference.patch"
+timeout_secs = 120
+tags = ["collections", "boundary"]
+
+[verifier]
+timeout_secs = 60
+
+[[verifier.checks]]
+name = "exclusive boundary regression"
+kind = "fail_to_pass"
+command = ["cargo", "test", "--test", "hidden", "--locked"]
+
+[[verifier.checks]]
+name = "existing library tests"
+kind = "pass_to_pass"
+command = ["cargo", "test", "--lib", "--locked"]
+
+[provenance]
+kind = "authored"
+license = "MIT OR Apache-2.0"
+audited_at = "2026-07-27"

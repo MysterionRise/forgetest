@@ -1,120 +1,77 @@
-# CI Integration
+# CI Evidence
 
-forgetest is designed for CI pipelines. Use it to continuously monitor LLM code generation quality.
+The checked-in `.github/workflows/ci.yml` defines four proof jobs.
 
-## GitHub Actions
+## Quality and Supply Chain
 
-### Basic Eval Run
+- `cargo fmt --all -- --check`
+- All-target Clippy with warnings denied.
+- Rustdoc with warnings denied.
+- mdBook build.
+- Workspace package dry run.
+- RustSec advisory scan.
+- License and source policy scan.
 
-```yaml
-name: LLM Eval
+## Cross-Platform Tests
 
-on:
-  schedule:
-    - cron: '0 6 * * 1'  # Weekly on Mondays
-  workflow_dispatch:       # Manual trigger
+`cargo test --workspace --all-targets --locked` runs on Linux, macOS, and
+Windows with Rust 1.92.0 from `rust-toolchain.toml`.
 
-jobs:
-  eval:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+## Deterministic Local Proof
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
+The Linux job:
 
-      - name: Install forgetest
-        run: cargo install --path crates/forgetest-cli
+1. Calibrates all 12 repository tasks.
+2. Verifies the checked-in sample-report schema and provenance contract.
+3. Runs the no-key local snippet demo.
+4. Runs the no-key local repository-agent demo.
+5. Installs the binary into an isolated prefix and smoke-tests it.
+6. Uploads the generated evidence.
 
-      - name: Run evaluations
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          forgetest run \
-            --eval-set eval-sets/rust-basics.toml \
-            --models anthropic/claude-sonnet-4-20250514 \
-            --format all \
-            --output results/
+## Hardened Docker Proof
 
-      - name: Upload results
-        uses: actions/upload-artifact@v4
-        with:
-          name: eval-results
-          path: results/
-```
+The Docker job:
 
-### Regression Detection
+1. Builds the pinned verifier image and locked offline cache.
+2. Runs the gated Docker execution integration test.
+3. Runs the no-key Docker snippet demo.
+4. Runs the no-key repository demo with Docker grading.
+5. Uploads private and redacted evidence bundles.
 
-Compare results against a saved baseline:
+A claim is CI-proven only for a commit with a green workflow run. The presence
+of workflow YAML alone is not evidence that a particular commit passed.
 
-```yaml
-      - name: Download baseline
-        uses: actions/download-artifact@v4
-        with:
-          name: eval-baseline
-          path: baseline/
-        continue-on-error: true
+## Paid Agent Studies
 
-      - name: Check for regressions
-        run: |
-          if [ -f baseline/report.json ]; then
-            forgetest compare \
-              --baseline baseline/report.json \
-              --current results/report-*.json \
-              --fail-on-regression
-          fi
-```
+Do not put an unlocked paid-model benchmark on every pull request. Use a
+manual, access-controlled workflow or disposable runner:
 
-### SARIF Upload (GitHub Code Scanning)
+1. Review and calibrate the suite.
+2. Build and publish immutable agent/verifier images.
+3. Create `benchmark.lock.toml`.
+4. Run the exact locked command.
+5. Retain raw artifacts privately.
+6. Review the redacted bundle.
+7. Publish the dated protocol, lock, public evidence, and workflow URL.
 
-Upload SARIF reports to see eval failures in the Security tab:
+The planned v1 public study is 12 tasks, 2 agents, and 3 trials. It is not a
+general leaderboard and should not be described as one.
 
-```yaml
-      - name: Upload SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results/
-```
+## SARIF
 
-## Exit Codes
+SARIF is intentionally restricted to deterministic compiler, Clippy, and
+grader findings. Free-form agent messages are not code-scanning findings.
 
-| Exit Code | Meaning |
-|-----------|---------|
-| 0 | Success |
-| 1 | Error or regression detected (with `--fail-on-regression`) |
+Upload `public/report.sarif` only after redaction review.
 
-## Report Formats
+## Tagged Releases
 
-| Format | Flag | Use Case |
-|--------|------|----------|
-| JSON | `--format json` | Machine-readable, baseline storage |
-| HTML | `--format html` | Human review, sharing results |
-| SARIF | `--format sarif` | GitHub Code Scanning integration |
-| All | `--format all` | Generate all formats at once |
+`.github/workflows/release.yml` reruns the release quality gate, builds
+cross-platform archives, publishes the verifier image to GHCR, records its
+immutable digest, generates per-crate CycloneDX JSON SBOMs, writes
+`SHA256SUMS`, and creates GitHub provenance attestations for both the image and
+release assets. It then publishes crates in dependency order, including
+`forgetest-agents`.
 
-## Multi-Model Comparison in CI
-
-Compare multiple models in a single run:
-
-```yaml
-      - name: Run multi-model eval
-        run: |
-          forgetest run \
-            --eval-set eval-sets/rust-basics.toml \
-            --models anthropic/claude-sonnet-4-20250514,openai/gpt-4.1 \
-            --pass-k 1,5 \
-            --temperature 0.8 \
-            --parallelism 8 \
-            --format json \
-            --output results/
-```
-
-## Tips
-
-- **Use `--parallelism`** to speed up runs (default: 4).
-- **Pin model versions** in CI for reproducible results.
-- **Store baselines as artifacts** for regression detection across runs.
-- **Run on a schedule** rather than every push to manage API costs.
-- **Use `--filter`** to run only specific case subsets in PR checks.
+These are workflow guarantees, not claims about an unreleased tag. Verify a
+published asset with `gh attestation verify` against this repository.

@@ -1,8 +1,9 @@
 [package]
 name = "forgetest-runner"
-description = "Sandboxed compilation and test execution for forgetest"
+description = "Local and hardened Docker verification for forgetest"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 keywords.workspace = true
@@ -23,6 +24,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tempfile = { workspace = true }
 uuid = { workspace = true }
+libc = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

@@ -1,0 +1,10 @@
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -4,5 +4,5 @@ pub fn effective_timeout(
+     user: Option<u64>,
+     default: u64,
+ ) -> u64 {
+-    user.or(explicit_file).or(cli).unwrap_or(default)
++    cli.or(explicit_file).or(user).unwrap_or(default)
+ }

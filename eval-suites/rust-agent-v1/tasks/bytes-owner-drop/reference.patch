@@ -1,0 +1,11 @@
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -12,6 +12,6 @@ impl<T> OwnedBytes<T> {
+ 
+     pub fn into_vec(mut self) -> Vec<u8> {
+         let data = std::mem::take(&mut self.data);
+-        std::mem::forget(self);
++        drop(self);
+         data
+     }

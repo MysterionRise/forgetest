@@ -29,7 +29,7 @@ pub trait LlmProvider: Send + Sync {
 /// Request to generate code from an LLM.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerateRequest {
-    /// Model identifier (e.g. "claude-sonnet-4-20250514").
+    /// Exact provider model identifier.
     pub model: String,
     /// The main prompt.
     pub prompt: String,
@@ -84,7 +84,7 @@ pub struct ModelInfo {
 // Code Runner trait
 // ---------------------------------------------------------------------------
 
-/// Trait for sandboxed code compilation and test execution.
+/// Trait for code compilation and test execution.
 #[async_trait]
 pub trait CodeRunner: Send + Sync {
     /// Compile generated code.

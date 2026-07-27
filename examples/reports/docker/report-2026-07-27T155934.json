@@ -1,0 +1,168 @@
+{
+  "id": "f5089f5a-d4d5-42cd-91b7-88315a2def71",
+  "created_at": "2026-07-27T15:59:34.940460Z",
+  "eval_set": {
+    "id": "forgetest-demo",
+    "name": "forgetest Offline Demo",
+    "case_count": 2
+  },
+  "models_evaluated": [
+    "mock-model"
+  ],
+  "results": [
+    {
+      "case_id": "add_function",
+      "model": "mock-model",
+      "provider": "mock",
+      "generated_code": "pub fn add(a: i32, b: i32) -> i32 { a + b }",
+      "compilation": {
+        "success": true,
+        "errors": [],
+        "warnings": [],
+        "duration_ms": 832
+      },
+      "test_execution": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "duration_ms": 1050,
+        "failures": []
+      },
+      "clippy": {
+        "warnings": [],
+        "warning_count": 0
+      },
+      "timing": {
+        "llm_request_ms": 0,
+        "compilation_ms": 832,
+        "test_execution_ms": 1050,
+        "total_ms": 3805
+      },
+      "token_usage": {
+        "prompt_tokens": 14,
+        "completion_tokens": 10,
+        "total_tokens": 24,
+        "estimated_cost_usd": 0.0
+      },
+      "score": {
+        "compilation": 1.0,
+        "tests": 1.0,
+        "clippy": 1.0,
+        "structure": 1.0,
+        "overall": 1.0
+      },
+      "status": "completed",
+      "error": null,
+      "attempt": 1,
+      "run_id": "f5089f5a-d4d5-42cd-91b7-88315a2def71"
+    },
+    {
+      "case_id": "reverse_string",
+      "model": "mock-model",
+      "provider": "mock",
+      "generated_code": "pub fn reverse_string(s: &str) -> String { s.chars().rev().collect() }",
+      "compilation": {
+        "success": true,
+        "errors": [],
+        "warnings": [],
+        "duration_ms": 992
+      },
+      "test_execution": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "duration_ms": 1255,
+        "failures": []
+      },
+      "clippy": {
+        "warnings": [],
+        "warning_count": 0
+      },
+      "timing": {
+        "llm_request_ms": 0,
+        "compilation_ms": 992,
+        "test_execution_ms": 1255,
+        "total_ms": 3873
+      },
+      "token_usage": {
+        "prompt_tokens": 19,
+        "completion_tokens": 17,
+        "total_tokens": 36,
+        "estimated_cost_usd": 0.0
+      },
+      "score": {
+        "compilation": 1.0,
+        "tests": 1.0,
+        "clippy": 1.0,
+        "structure": 1.0,
+        "overall": 1.0
+      },
+      "status": "completed",
+      "error": null,
+      "attempt": 1,
+      "run_id": "f5089f5a-d4d5-42cd-91b7-88315a2def71"
+    }
+  ],
+  "aggregate": {
+    "per_model": {
+      "mock-model": {
+        "model": "mock-model",
+        "pass_at_k": {
+          "1": 1.0
+        },
+        "avg_compilation_rate": 1.0,
+        "avg_test_pass_rate": 1.0,
+        "avg_clippy_score": 1.0,
+        "total_tokens": 60,
+        "total_cost_usd": 0.0,
+        "avg_trial_duration_ms": 3839
+      }
+    },
+    "per_case": {
+      "add_function": {
+        "case_id": "add_function",
+        "per_model_pass_rate": {
+          "mock-model": 1.0
+        }
+      },
+      "reverse_string": {
+        "case_id": "reverse_string",
+        "per_model_pass_rate": {
+          "mock-model": 1.0
+        }
+      }
+    }
+  },
+  "manifest": {
+    "schema_version": 2,
+    "hash_algorithm": "sha256",
+    "forgetest_version": "0.1.0",
+    "git_sha": "4dde060a02d9ee0a849941a80f991fea4e42f3b9",
+    "git_dirty": true,
+    "rustc_version": "rustc 1.92.0 (ded5c06cf 2025-12-08)",
+    "cargo_version": "cargo 1.92.0 (344c4567c 2025-10-21)",
+    "runner": {
+      "runner_type": "docker",
+      "docker_image": "forgetest-runner-rust:0.1.0",
+      "docker_image_digest": "sha256:bc68a5dfa6c4587ebb3edcd7a7f977b7bf68cedb69ee7ba428298874cef14ecf"
+    },
+    "eval_set_hash": "ad9d02ecd73959737a0338ac85e8ff6ff3ddfdf83fa0c8e5e4fbf53878fa37c2",
+    "case_hashes": {
+      "add_function": "417fb207aa043c4a3edc3ad7eaad07f427222266809b59fb628e5a4c0b9ae9e3",
+      "reverse_string": "1362c3261be2043598c4c41dc8a40f5a97b3c0191b0f5c1a1a1ee2fa6c55c6f2"
+    },
+    "models": [
+      {
+        "provider": "mock",
+        "model": "mock-model"
+      }
+    ],
+    "pass_k": [
+      1
+    ],
+    "temperature": 0.0,
+    "created_at": "2026-07-27T15:59:27.260550Z",
+    "config_hash": "1a91c64a6c4935b6e948a2450ced976e94d8e436ce8b53645eb0ad35da32ce70"
+  },
+  "duration_ms": 7679
+}

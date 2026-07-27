@@ -1,0 +1,2 @@
+# Unified-diff context lines may consist of one required prefix space.
+eval-suites/**/reference.patch -whitespace

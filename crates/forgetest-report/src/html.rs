@@ -6,6 +6,7 @@ use anyhow::Result;
 use std::path::Path;
 
 use forgetest_core::report::EvalReport;
+use forgetest_core::repository_report::{RepositoryReport, TrialStatus};
 
 /// Escape a string for safe HTML insertion.
 fn html_escape(s: &str) -> String {
@@ -50,7 +51,7 @@ pub fn generate_html(report: &EvalReport) -> String {
 
     // Model summary table
     html.push_str("<table class=\"summary\">\n");
-    html.push_str("<thead><tr><th>Model</th><th>Pass@1</th><th>Compile %</th><th>Test Pass %</th><th>Cost</th><th>Avg Latency</th></tr></thead>\n");
+    html.push_str("<thead><tr><th>Model</th><th>Pass@1</th><th>Compile %</th><th>Test Pass %</th><th>Cost</th><th>Avg Trial</th></tr></thead>\n");
     html.push_str("<tbody>\n");
     for (model, stats) in &report.aggregate.per_model {
         let pass_1 = stats.pass_at_k.get(&1).copied().unwrap_or(0.0);
@@ -61,7 +62,7 @@ pub fn generate_html(report: &EvalReport) -> String {
             stats.avg_compilation_rate * 100.0,
             stats.avg_test_pass_rate * 100.0,
             stats.total_cost_usd,
-            stats.avg_latency_ms,
+            stats.avg_trial_duration_ms,
         ));
     }
     html.push_str("</tbody></table>\n");
@@ -132,6 +133,231 @@ pub fn write_html_report(report: &EvalReport, path: &Path) -> Result<()> {
     }
     std::fs::write(path, html)?;
     Ok(())
+}
+
+/// Generate a self-contained repository-agent evidence report.
+pub fn generate_repository_html(report: &RepositoryReport) -> String {
+    let mut html = String::new();
+    html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+    html.push_str("<meta charset=\"utf-8\">\n");
+    html.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+    html.push_str(&format!(
+        "<title>forgetest evidence - {}</title>\n",
+        html_escape(&report.suite.name)
+    ));
+    html.push_str("<style>\n");
+    html.push_str(CSS);
+    html.push_str(REPOSITORY_CSS);
+    html.push_str("</style>\n</head>\n<body>\n");
+    html.push_str("<header>\n<h1>forgetest agent evidence</h1>\n");
+    html.push_str(&format!(
+        "<p class=\"meta\">Suite: <strong>{}</strong> | {} trials | {} | {}</p>\n",
+        html_escape(&report.suite.name),
+        report.trials.len(),
+        html_escape(&report.policy.profile),
+        report.created_at.format("%Y-%m-%d %H:%M:%S UTC")
+    ));
+    html.push_str("</header>\n");
+
+    html.push_str("<section>\n<h2>Provenance</h2>\n<dl class=\"provenance\">");
+    evidence_term(&mut html, "Suite digest", &report.suite.digest);
+    evidence_term(&mut html, "Policy digest", &report.policy.digest);
+    evidence_term(
+        &mut html,
+        "Agent environment",
+        &report.policy.agent_environment,
+    );
+    evidence_term(
+        &mut html,
+        "Verifier environment",
+        &report.policy.verifier_environment,
+    );
+    evidence_term(
+        &mut html,
+        "Verifier image",
+        report
+            .policy
+            .verifier_image
+            .as_deref()
+            .unwrap_or("not recorded"),
+    );
+    evidence_term(&mut html, "Verifier network", &report.policy.network);
+    evidence_term(
+        &mut html,
+        "Publication status",
+        if report.redaction.redacted {
+            "redacted public artifact"
+        } else {
+            "private raw artifact"
+        },
+    );
+    html.push_str("</dl>\n</section>\n");
+
+    html.push_str("<section>\n<h2>Reliability</h2>\n");
+    html.push_str("<table><thead><tr><th>Agent</th><th>Resolved</th><th>Observed rate</th><th>95% CI</th><th>Pass@1</th><th>Pass^3</th><th>Infrastructure errors</th><th>Cost</th></tr></thead><tbody>\n");
+    for (agent, stats) in &report.aggregate.per_agent {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}/{}</td><td>{:.1}%</td><td>{:.1}% to {:.1}%</td><td>{:.1}%</td><td>{:.1}%</td><td>{}</td><td>${:.4}</td></tr>\n",
+            html_escape(agent),
+            stats.passed,
+            stats.scheduled,
+            stats.observed_resolution_rate * 100.0,
+            stats.wilson_95_low * 100.0,
+            stats.wilson_95_high * 100.0,
+            stats.pass_at_1 * 100.0,
+            stats.pass_power_3 * 100.0,
+            stats.infrastructure_errors,
+            stats.total_cost_usd,
+        ));
+    }
+    html.push_str("</tbody></table>\n</section>\n");
+
+    if !report.aggregate.pairwise.is_empty() {
+        html.push_str("<section>\n<h2>Paired comparisons</h2>\n");
+        html.push_str("<table><thead><tr><th>Agent A</th><th>Agent B</th><th>Common tasks</th><th>Delta (B - A)</th><th>Bootstrap 95% CI</th><th>Resamples</th></tr></thead><tbody>\n");
+        for comparison in &report.aggregate.pairwise {
+            html.push_str(&format!(
+                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{:+.1}%</td><td>{:.1}% to {:.1}%</td><td>{}</td></tr>\n",
+                html_escape(&comparison.agent_a),
+                html_escape(&comparison.agent_b),
+                comparison.common_tasks,
+                comparison.delta_b_minus_a * 100.0,
+                comparison.ci_95_low * 100.0,
+                comparison.ci_95_high * 100.0,
+                format_count(comparison.bootstrap_iterations as u64),
+            ));
+        }
+        html.push_str("</tbody></table>\n</section>\n");
+    }
+
+    html.push_str("<section>\n<h2>Trial matrix</h2>\n");
+    html.push_str("<table id=\"results\"><thead><tr><th>Task</th><th>Agent</th><th>Trial</th><th>Status</th><th>Files</th><th>Duration</th></tr></thead><tbody>\n");
+    for trial in &report.trials {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td><span class=\"status {}\">{}</span></td><td>{}</td><td>{}ms</td></tr>\n",
+            html_escape(&trial.task_id),
+            html_escape(&trial.agent.key()),
+            trial.trial_index,
+            status_class(trial.status),
+            status_label(trial.status),
+            trial.changed_files.len(),
+            trial.duration_ms,
+        ));
+    }
+    html.push_str("</tbody></table>\n</section>\n");
+
+    html.push_str("<section>\n<h2>Trial evidence</h2>\n");
+    for trial in &report.trials {
+        html.push_str(&format!(
+            "<details><summary>{} / {} / trial {} - {}</summary>\n",
+            html_escape(&trial.task_id),
+            html_escape(&trial.agent.key()),
+            trial.trial_index,
+            status_label(trial.status)
+        ));
+        if let Some(error) = &trial.error {
+            html.push_str(&format!(
+                "<h3>Failure</h3><pre><code>{}</code></pre>\n",
+                html_escape(error)
+            ));
+        }
+        html.push_str("<h3>Timeline</h3><ol class=\"timeline\">\n");
+        for event in &trial.events {
+            html.push_str(&format!(
+                "<li><time>{}</time> <strong>{:?}</strong> {}</li>\n",
+                event.timestamp.format("%H:%M:%S%.3f"),
+                event.kind,
+                html_escape(&event.message)
+            ));
+        }
+        html.push_str("</ol>\n");
+        if let Some(grader) = &trial.grader {
+            html.push_str("<h3>Grader evidence</h3><table><thead><tr><th>Check</th><th>Kind</th><th>Result</th><th>Details</th></tr></thead><tbody>");
+            for check in &grader.checks {
+                html.push_str(&format!(
+                    "<tr><td>{}</td><td>{:?}</td><td>{}</td><td>{}</td></tr>",
+                    html_escape(&check.name),
+                    check.kind,
+                    if check.passed { "pass" } else { "fail" },
+                    html_escape(&check.details)
+                ));
+            }
+            html.push_str("</tbody></table>\n");
+            if !grader.stderr.is_empty() {
+                html.push_str(&format!(
+                    "<pre><code>{}</code></pre>\n",
+                    html_escape(&grader.stderr)
+                ));
+            }
+        }
+        html.push_str(&format!(
+            "<h3>Patch</h3><pre><code>{}</code></pre>\n",
+            html_escape(&trial.patch)
+        ));
+        html.push_str("</details>\n");
+    }
+    html.push_str("</section>\n");
+
+    html.push_str("<section><details><summary>Raw report JSON</summary><pre><code>");
+    html.push_str(&html_escape(
+        &serde_json::to_string_pretty(report).unwrap_or_default(),
+    ));
+    html.push_str("</code></pre></details></section>\n");
+    html.push_str("</body>\n</html>");
+    html
+}
+
+/// Write a repository-agent HTML report.
+pub fn write_repository_html_report(report: &RepositoryReport, path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, generate_repository_html(report))?;
+    Ok(())
+}
+
+fn evidence_term(html: &mut String, label: &str, value: &str) {
+    html.push_str(&format!(
+        "<div><dt>{}</dt><dd><code>{}</code></dd></div>",
+        html_escape(label),
+        html_escape(value)
+    ));
+}
+
+fn format_count(value: u64) -> String {
+    let digits = value.to_string();
+    let mut output = String::with_capacity(digits.len() + digits.len() / 3);
+    for (index, byte) in digits.bytes().enumerate() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            output.push(',');
+        }
+        output.push(char::from(byte));
+    }
+    output
+}
+
+fn status_class(status: TrialStatus) -> &'static str {
+    match status {
+        TrialStatus::Passed => "status-pass",
+        TrialStatus::Failed => "status-fail",
+        TrialStatus::Timeout => "status-timeout",
+        TrialStatus::AgentError
+        | TrialStatus::EnvironmentError
+        | TrialStatus::GraderError
+        | TrialStatus::Cancelled => "status-error",
+    }
+}
+
+fn status_label(status: TrialStatus) -> &'static str {
+    match status {
+        TrialStatus::Passed => "passed",
+        TrialStatus::Failed => "failed",
+        TrialStatus::AgentError => "agent error",
+        TrialStatus::EnvironmentError => "environment error",
+        TrialStatus::GraderError => "grader error",
+        TrialStatus::Timeout => "timeout",
+        TrialStatus::Cancelled => "cancelled",
+    }
 }
 
 fn generate_bar_chart(
@@ -226,6 +452,27 @@ function sortTable(col) {
 }
 "#;
 
+const REPOSITORY_CSS: &str = r#"
+body { max-width: 1440px; margin: 0 auto; }
+section { margin: 2rem 0; }
+.provenance { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); }
+.provenance div { background: var(--bg); padding: 0.75rem; min-width: 0; }
+.provenance dt { color: #6b7280; font-size: 0.8rem; margin-bottom: 0.35rem; }
+.provenance dd { margin: 0; overflow-wrap: anywhere; }
+.status { display: inline-block; padding: 0.15rem 0.45rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+.status-pass { background: #dcfce7; color: #166534; }
+.status-fail { background: #fee2e2; color: #991b1b; }
+.status-error { background: #fef3c7; color: #92400e; }
+.status-timeout { background: #e0e7ff; color: #3730a3; }
+.timeline { padding-left: 1.5rem; }
+.timeline li { margin: 0.4rem 0; }
+.timeline time { color: #6b7280; font-family: monospace; margin-right: 0.5rem; }
+@media (max-width: 720px) {
+  body { padding: 1rem; }
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+}
+"#;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,6 +522,9 @@ mod tests {
                     total_tokens: 150,
                     estimated_cost_usd: 0.001,
                 },
+                score: None,
+                status: Default::default(),
+                error: None,
                 attempt: 1,
                 run_id: uuid::Uuid::nil(),
             }],
@@ -295,13 +545,14 @@ mod tests {
                             avg_clippy_score: 1.0,
                             total_tokens: 150,
                             total_cost_usd: 0.001,
-                            avg_latency_ms: 650,
+                            avg_trial_duration_ms: 650,
                         },
                     );
                     m
                 },
                 per_case: HashMap::new(),
             },
+            manifest: None,
             duration_ms: 1000,
         }
     }

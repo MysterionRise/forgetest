@@ -22,14 +22,19 @@ pub fn execute() -> Result<()> {
     }
 
     println!("\nNext steps:");
-    println!("  1. Edit forgetest.toml with your API keys");
+    println!("  1. Select an exact model ID and configure provider credentials");
     println!("  2. Run: forgetest validate --eval-set eval-sets/example.toml");
-    println!("  3. Run: forgetest run --eval-set eval-sets/example.toml");
+    println!("  3. Run: forgetest run --config forgetest.toml --eval-set eval-sets/example.toml");
 
     Ok(())
 }
 
 const SAMPLE_CONFIG: &str = r#"# forgetest configuration
+
+default_provider = "anthropic"
+default_model = "replace-with-provider-model-id"
+default_temperature = 0.0
+parallelism = 4
 
 [providers.anthropic]
 type = "anthropic"
@@ -43,10 +48,13 @@ api_key = "${OPENAI_API_KEY}"
 type = "ollama"
 base_url = "http://localhost:11434"
 
-default_provider = "anthropic"
-default_model = "claude-sonnet-4-20250514"
-default_temperature = 0.0
-parallelism = 4
+[runner]
+type = "local"
+docker_image = "forgetest-runner-rust:0.1.0"
+memory = "512m"
+cpus = 1.0
+pids_limit = 128
+network = "none"
 "#;
 
 const EXAMPLE_EVAL_SET: &str = r#"[eval_set]
@@ -108,3 +116,19 @@ mod tests {
 """
 expected_functions = ["reverse_string"]
 "#;
+
+#[cfg(test)]
+mod tests {
+    use forgetest_providers::config::ForgetestConfig;
+
+    use super::SAMPLE_CONFIG;
+
+    #[test]
+    fn generated_config_is_strictly_parseable() {
+        let config = toml::from_str::<ForgetestConfig>(SAMPLE_CONFIG).unwrap();
+        assert_eq!(
+            config.default_model,
+            forgetest_providers::config::UNCONFIGURED_MODEL_ID
+        );
+    }
+}

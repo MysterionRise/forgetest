@@ -1,0 +1,32 @@
+schema_version = 1
+id = "ordered-type-flags"
+name = "Respect ordered type flag overrides"
+description = "Reduced adaptation of ripgrep's ordered CLI flag migration."
+category = "api_migration"
+language = "rust"
+prompt = "prompt.md"
+workspace = "workspace"
+grader = "grader"
+reference_patch = "reference.patch"
+timeout_secs = 240
+tags = ["snapshot", "cli", "migration"]
+
+[verifier]
+timeout_secs = 60
+
+[[verifier.checks]]
+name = "ordered override regression"
+kind = "fail_to_pass"
+command = ["cargo", "test", "--test", "hidden", "--locked"]
+
+[[verifier.checks]]
+name = "existing library tests"
+kind = "pass_to_pass"
+command = ["cargo", "test", "--lib", "--locked"]
+
+[provenance]
+kind = "snapshot"
+license = "MIT OR Unlicense"
+source_url = "https://github.com/BurntSushi/ripgrep/commit/3b9f44671e3a60ef0cc9b4b3a1e61f59b36f5342"
+source_revision = "3b9f44671e3a60ef0cc9b4b3a1e61f59b36f5342"
+audited_at = "2026-07-27"
