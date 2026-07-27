@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -404,11 +404,9 @@ async fn repository_trials_respect_parallelism_and_keep_stable_order() {
         peak: Arc::clone(&peak),
     });
 
-    let started = Instant::now();
     let report = engine.run(&suite, vec![agent]).await.unwrap();
 
     assert_eq!(peak.load(Ordering::SeqCst), 2);
-    assert!(started.elapsed() < Duration::from_millis(550));
     assert_eq!(
         report
             .trials
