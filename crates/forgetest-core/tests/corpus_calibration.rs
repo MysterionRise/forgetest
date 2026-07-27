@@ -80,13 +80,16 @@ fn null_patches_fail_and_reference_patches_pass_every_task() {
             .reference_patch
             .as_ref()
             .unwrap_or_else(|| panic!("{} has no reference patch", task.id));
+        let staged_patch = reference_workspace.path().join("reference.patch");
+        std::fs::copy(patch, &staged_patch).unwrap();
         let applied = Command::new("git")
             .arg("apply")
             .arg("--whitespace=nowarn")
-            .arg(patch)
+            .arg("reference.patch")
             .current_dir(reference_workspace.path())
             .output()
             .unwrap();
+        std::fs::remove_file(staged_patch).unwrap();
         assert!(
             applied.status.success(),
             "{} reference patch did not apply:\n{}",
