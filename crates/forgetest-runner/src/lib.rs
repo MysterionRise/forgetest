@@ -10,6 +10,7 @@ pub mod compiler;
 pub mod docker;
 pub mod repository_grader;
 pub mod test_runner;
+mod toolchain;
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};

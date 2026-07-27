@@ -10,6 +10,8 @@ use tokio::process::Command;
 use forgetest_core::model::Language;
 use forgetest_core::traits::Dependency;
 
+use crate::toolchain::configure_platform_toolchain_environment;
+
 /// A temporary Cargo project with no process-isolation guarantee.
 ///
 /// On drop, the temporary directory is automatically cleaned up.
@@ -208,6 +210,7 @@ edition = "2021"
                 }
             }
         }
+        configure_platform_toolchain_environment(command);
     }
 }
 
