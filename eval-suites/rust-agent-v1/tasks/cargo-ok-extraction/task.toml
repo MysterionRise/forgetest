@@ -1,0 +1,32 @@
+schema_version = 1
+id = "cargo-ok-extraction"
+name = "Protect package extraction marker"
+description = "Reduced adaptation of Cargo's CVE-2022-36113 fix."
+category = "security_robustness"
+language = "rust"
+prompt = "prompt.md"
+workspace = "workspace"
+grader = "grader"
+reference_patch = "reference.patch"
+timeout_secs = 240
+tags = ["snapshot", "security", "cve", "archive"]
+
+[verifier]
+timeout_secs = 60
+
+[[verifier.checks]]
+name = "protected marker regression"
+kind = "fail_to_pass"
+command = ["cargo", "test", "--test", "hidden", "--locked"]
+
+[[verifier.checks]]
+name = "existing library tests"
+kind = "pass_to_pass"
+command = ["cargo", "test", "--lib", "--locked"]
+
+[provenance]
+kind = "snapshot"
+license = "MIT OR Apache-2.0"
+source_url = "https://github.com/rust-lang/cargo/commit/97b80919e404b0768ea31ae329c3b4da54bed05a"
+source_revision = "97b80919e404b0768ea31ae329c3b4da54bed05a"
+audited_at = "2026-07-27"

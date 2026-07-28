@@ -1,0 +1,4 @@
+[package]
+name = "ft_ordered_type_flags"
+version = "0.1.0"
+edition = "2021"

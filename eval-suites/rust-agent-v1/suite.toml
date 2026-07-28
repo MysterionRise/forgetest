@@ -1,0 +1,52 @@
+schema_version = 2
+id = "rust-agent-v1"
+name = "forgetest Rust Agent v1"
+description = "Twelve calibrated repository tasks for execution-backed Rust coding-agent evaluation."
+
+[[tasks]]
+id = "range-boundary"
+path = "tasks/range-boundary"
+
+[[tasks]]
+id = "config-precedence"
+path = "tasks/config-precedence"
+
+[[tasks]]
+id = "bytes-owner-drop"
+path = "tasks/bytes-owner-drop"
+
+[[tasks]]
+id = "retry-policy"
+path = "tasks/retry-policy"
+
+[[tasks]]
+id = "log-filter"
+path = "tasks/log-filter"
+
+[[tasks]]
+id = "circuit-breaker"
+path = "tasks/circuit-breaker"
+
+[[tasks]]
+id = "event-api"
+path = "tasks/event-api"
+
+[[tasks]]
+id = "ordered-type-flags"
+path = "tasks/ordered-type-flags"
+
+[[tasks]]
+id = "once-notify"
+path = "tasks/once-notify"
+
+[[tasks]]
+id = "mpsc-close-permit"
+path = "tasks/mpsc-close-permit"
+
+[[tasks]]
+id = "safe-path"
+path = "tasks/safe-path"
+
+[[tasks]]
+id = "cargo-ok-extraction"
+path = "tasks/cargo-ok-extraction"

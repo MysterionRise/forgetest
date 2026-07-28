@@ -44,6 +44,9 @@ fn make_result(compile_ok: bool, passed: u32, failed: u32, warnings: u32) -> Eva
             total_tokens: 300,
             estimated_cost_usd: 0.01,
         },
+        score: None,
+        status: Default::default(),
+        error: None,
         attempt: 1,
         run_id: Uuid::nil(),
     }

@@ -1,131 +1,174 @@
-# Advanced Usage
+# Benchmark Operations
 
-## Programmatic API
+## Development and Benchmark Profiles
 
-Use forgetest as a library in your own Rust projects:
+`development` is for trusted iteration:
 
-```rust
-use forgetest_core::parser;
-use forgetest_core::engine::{EvalEngine, EvalEngineConfig, ModelSpec, NoopReporter};
-use forgetest_providers::config::load_config;
-use forgetest_providers::create_provider;
-use forgetest_runner::LocalRunner;
-use std::collections::HashMap;
-use std::sync::Arc;
+- Installed host agent CLI.
+- Explicit environment allowlist and isolated home.
+- Local or Docker verifier.
+- Model and CLI identity recorded, but no immutable image lock required.
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = load_config()?;
-    let eval_set = parser::parse_eval_set("eval-sets/rust-basics.toml".as_ref())?;
+`benchmark` is for publishable studies:
 
-    let provider = create_provider("anthropic", config.providers.get("anthropic").unwrap())?;
-    let mut providers = HashMap::new();
-    providers.insert("anthropic".to_string(), Arc::from(provider));
+- Agent CLI in an ephemeral outer container.
+- Independent Docker verifier.
+- Full immutable image digests.
+- Exact CLI version and executable SHA-256 preflight.
+- Exact model, effort, suite, and complete execution-policy lock.
+- Requested-model, command-profile, binary, image, suite, and policy drift
+  rejected.
 
-    let runner = Arc::new(LocalRunner::new(".forgetest-target".into()));
-    let engine = EvalEngine::new(providers, runner, EvalEngineConfig::default());
-    let models = vec![ModelSpec {
-        provider: "anthropic".to_string(),
-        model: "claude-sonnet-4-20250514".to_string(),
-    }];
+## Build Agent Images
 
-    let report = engine.run(&eval_set, &models, &NoopReporter).await?;
+v1 deliberately does not ship vendor credentials or a universal agent image.
+Build one image per adapter that:
 
-    println!("Results: {} cases evaluated", report.results.len());
-    report.save_json("results/report.json".as_ref())?;
-    Ok(())
-}
+- Contains the exact `codex` or `claude` executable.
+- Runs correctly as an arbitrary non-root UID.
+- Uses environment credentials at runtime.
+- Does not require the host home or Docker socket.
+- Supports `--version` without network or credentials.
+
+Push the images and retain full registry digests.
+See the exact
+[agent image contract](https://github.com/MysterionRise/forgetest/blob/master/docker/agents/README.md).
+
+## Create a Benchmark Lock
+
+```bash
+forgetest agents lock \
+  --suite eval-suites/rust-agent-v1/suite.toml \
+  --agent codex/MODEL=registry.example/codex@sha256:DIGEST \
+  --agent claude/MODEL=registry.example/claude@sha256:DIGEST \
+  --effort codex=high \
+  --effort claude=high \
+  --verifier-image registry.example/forgetest-runner-rust@sha256:DIGEST \
+  --trials 3 \
+  --parallelism 2 \
+  --agent-timeout-secs 900 \
+  --max-agent-output-bytes 4194304 \
+  --max-agent-tokens 200000 \
+  --max-agent-cost-usd 10 \
+  --agent-retries 0 \
+  --output benchmark.lock.toml
 ```
 
-## Custom Scoring
+The lock command runs a credential-free, network-disabled preflight inside each
+agent image and records the observed executable hash and version.
+It rejects common moving aliases such as `default`, `latest`, `sonnet`, `opus`,
+and `haiku`; use the exact provider model identifier intended for the study.
+The harness cannot independently detect provider-side model substitution unless
+the vendor reports the resolved model in its event stream.
 
-The default scoring weights (30% compile, 45% tests, 15% structure, 10% clippy) can be computed manually:
+Re-audit the locked agent and verifier images later:
 
-```rust
-use forgetest_core::results::Score;
-
-let score = Score::compute(&eval_result, &expectations);
-println!("Overall: {:.1}%", score.overall * 100.0);
-println!("Compilation: {:.1}%", score.compilation * 100.0);
-println!("Tests: {:.1}%", score.tests * 100.0);
-println!("Clippy: {:.1}%", score.clippy * 100.0);
+```bash
+forgetest agents doctor --benchmark-lock benchmark.lock.toml
 ```
 
-To implement custom scoring, compute your own weighted combination from the `EvalResult` fields.
+## Run the Study
 
-## Sandbox Details
-
-Each eval case runs in an isolated Cargo project:
-
-1. A temporary directory is created with a fresh `Cargo.toml`
-2. Generated code is written to `src/lib.rs`
-3. Test code is appended to `src/lib.rs`
-4. `cargo build` compiles the code
-5. `cargo test` runs the test suite
-6. `cargo clippy` checks for warnings
-7. The temp directory is cleaned up
-
-The sandbox:
-
-- Uses a **shared target directory** for caching compiled dependencies
-- Clears sensitive environment variables (`SSH_AUTH_SOCK`, `AWS_*`)
-- Enforces configurable **timeouts** on all operations
-- Supports adding **dependencies** (e.g., `tokio` for async eval cases)
-
-## Adding Dependencies to Eval Cases
-
-For cases that need external crates (like `tokio`), the sandbox automatically handles dependency management. Dependencies defined in the eval set configuration are added to the sandbox's `Cargo.toml`.
-
-## Extending with New Providers
-
-Implement the `LlmProvider` trait to add a new provider:
-
-```rust
-use async_trait::async_trait;
-use forgetest_core::traits::{LlmProvider, GenerateRequest, GenerateResponse, ModelInfo};
-
-pub struct MyProvider {
-    api_key: String,
-}
-
-#[async_trait]
-impl LlmProvider for MyProvider {
-    fn name(&self) -> &str {
-        "my-provider"
-    }
-
-    async fn generate(&self, request: &GenerateRequest) -> anyhow::Result<GenerateResponse> {
-        // Call your API and return the response
-        todo!()
-    }
-
-    fn available_models(&self) -> Vec<ModelInfo> {
-        vec![ModelInfo {
-            id: "my-model".to_string(),
-            name: "My Model".to_string(),
-            provider: "my-provider".to_string(),
-            max_context: 128_000,
-            cost_per_1k_input: 0.001,
-            cost_per_1k_output: 0.002,
-        }]
-    }
-}
+```bash
+forgetest run \
+  --suite eval-suites/rust-agent-v1/suite.toml \
+  --agents codex,claude \
+  --trials 3 \
+  --profile benchmark \
+  --benchmark-lock benchmark.lock.toml \
+  --output ./runs/2026-rc1 \
+  --format all
 ```
 
-## Report Post-Processing
+The benchmark lock must match the complete effective policy. Changing
+parallelism, a budget, retry count, image, task content, or suite membership
+requires a new lock.
 
-Load and manipulate reports programmatically:
+Use a new or empty output directory for every run. Repository commands reject
+non-empty evidence directories so stale files cannot enter a new inventory.
 
-```rust
-use forgetest_core::report::EvalReport;
+## Failure Accounting
 
-let baseline = EvalReport::load_json("baseline.json".as_ref())?;
-let current = EvalReport::load_json("current.json".as_ref())?;
+Every scheduled trial is retained:
 
-let regression_report = current.compare(&baseline, 0.05);
+| Status | Meaning |
+|---|---|
+| `passed` | Every required verifier check passed |
+| `failed` | Agent completed, patch applied, required check failed |
+| `agent_error` | Adapter/process failed or returned non-zero |
+| `environment_error` | Materialization or execution environment failed |
+| `grader_error` | Verifier infrastructure failed |
+| `timeout` | Agent exhausted its wall-time budget |
+| `cancelled` | Trial was explicitly cancelled |
 
-if regression_report.has_regressions() {
-    println!("{}", regression_report.to_markdown());
-    std::process::exit(1);
-}
+Agent errors and timeouts count against observed agent reliability.
+Environment/grader errors are also broken out as infrastructure errors.
+
+## Retries and Budgets
+
+Retries apply only after agent errors or non-zero exits. Before a retry,
+`forgetest` restores the pristine visible workspace. Agent time, reported
+tokens, and reported cost are cumulative across attempts.
+
+Output-byte, 10,000-event, and timeout limits terminate Unix process groups and
+force-remove containers. Windows host development mode terminates the direct
+child.
+Token/cost values depend on normalized vendor events and are not independent
+billing records.
+
+## Compare Runs
+
+```bash
+forgetest compare \
+  --baseline ./runs/baseline/raw/report.json \
+  --current ./runs/candidate/raw/report.json \
+  --threshold 0.05 \
+  --fail-on-regression
 ```
+
+Schema v2 regression gates require equal suite digest, all task digests, and
+execution-policy digest:
+
+```bash
+forgetest compare \
+  --baseline old.json \
+  --current changed-policy.json \
+  --allow-incomparable
+```
+
+The second command is explicitly non-gating.
+
+## Public Evidence
+
+Repository runs write both bundles automatically. To re-redact an existing raw
+report:
+
+```bash
+forgetest redact \
+  --input ./runs/2026-rc1/raw/report.json \
+  --output ./runs/2026-rc1/public-review \
+  --format all
+```
+
+Review public output manually before release. The sanitizer is deterministic
+for its inputs but cannot recognize every possible secret encoding.
+
+## Harbor Subset
+
+```bash
+forgetest harbor export \
+  --suite eval-suites/rust-agent-v1/suite.toml \
+  --output ./harbor-export \
+  --base-image registry.example/verifier@sha256:DIGEST
+```
+
+Import accepts only tasks carrying the forgetest bridge marker. The bridge
+preserves named checks but does not claim support for general Harbor services,
+multi-container environments, or arbitrary setup logic.
+
+## Legacy Programmatic API
+
+The `EvalEngine`, `LlmProvider`, and `CodeRunner` APIs remain available for
+snippet evaluation. Internal Rust APIs for repository execution may evolve
+before v1; the public CLI and old report deserialization are the compatibility
+boundary.

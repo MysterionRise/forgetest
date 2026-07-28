@@ -1,0 +1,15 @@
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,3 +1,9 @@
+-pub fn retry_delays(_base_ms: u64, _max_ms: u64, _retries: usize) -> Vec<u64> {
+-    Vec::new()
++pub fn retry_delays(base_ms: u64, max_ms: u64, retries: usize) -> Vec<u64> {
++    let mut delays = Vec::with_capacity(retries);
++    let mut next = base_ms.min(max_ms);
++    for _ in 0..retries {
++        delays.push(next);
++        next = next.saturating_mul(2).min(max_ms);
++    }
++    delays
+ }

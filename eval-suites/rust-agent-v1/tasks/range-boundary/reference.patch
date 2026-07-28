@@ -1,0 +1,12 @@
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -6,7 +6,7 @@ pub fn plan_chunks(total: usize, chunk_size: usize) -> Vec<(usize, usize)> {
+     let mut chunks = Vec::new();
+     let mut start = 0;
+     while start < total {
+-        let end = (start + chunk_size).min(total.saturating_sub(1));
++        let end = (start + chunk_size).min(total);
+         chunks.push((start, end));
+         start += chunk_size;
+     }

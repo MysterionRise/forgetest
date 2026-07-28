@@ -1,0 +1,26 @@
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -8,15 +8,15 @@ pub enum TypeChange {
+ 
+ pub fn selected_types(changes: &[TypeChange]) -> BTreeSet<String> {
+     let mut selected = BTreeSet::new();
+     for change in changes {
+-        if let TypeChange::Include(name) = change {
+-            selected.insert(name.clone());
++        match change {
++            TypeChange::Include(name) => {
++                selected.insert(name.clone());
++            }
++            TypeChange::Exclude(name) => {
++                selected.remove(name);
++            }
+         }
+     }
+-    for change in changes {
+-        if let TypeChange::Exclude(name) = change {
+-            selected.remove(name);
+-        }
+-    }
+     selected
+ }

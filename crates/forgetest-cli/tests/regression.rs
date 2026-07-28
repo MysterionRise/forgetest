@@ -60,6 +60,9 @@ fn make_result(
             total_tokens: 30,
             estimated_cost_usd: 0.001,
         },
+        score: None,
+        status: Default::default(),
+        error: None,
         attempt: 1,
         run_id: Uuid::nil(),
     }
@@ -87,6 +90,7 @@ fn make_report(results: Vec<EvalResult>) -> EvalReport {
             per_model: HashMap::new(),
             per_case: HashMap::new(),
         },
+        manifest: None,
         duration_ms: 1000,
     }
 }

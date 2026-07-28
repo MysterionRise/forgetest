@@ -1,106 +1,70 @@
-# Providers
+# Providers and Agents
 
-forgetest supports three LLM providers out of the box. Configure them in `forgetest.toml`.
+`forgetest` has two distinct integration layers.
 
-## Anthropic
+## Coding Agents
+
+Repository suites use external coding-agent CLIs through `AgentExecutor`.
+
+Built-in profiles:
+
+- `codex`: noninteractive JSONL execution with an exact model.
+- `claude`: noninteractive stream-JSON execution with an exact model.
+- `generic`: library adapter for an arbitrary external command.
+- `scripted`: deterministic offline adapter used by tests and demos.
+
+Check local installations:
+
+```bash
+forgetest agents doctor --agents codex/MODEL,claude/MODEL
+```
+
+The doctor command reports executable path, version, binary SHA-256, and
+whether required credential variables are present. It never prints credential
+values.
+
+Model names are supplied explicitly by the operator. Documentation does not
+claim a permanently current vendor model list. Benchmark mode freezes the exact
+selection in `benchmark.lock.toml` and rejects common moving aliases such as
+`default`, `latest`, `sonnet`, `opus`, and `haiku`.
+
+## Legacy Completion Providers
+
+Snippet eval sets support Anthropic, OpenAI-compatible APIs, and Ollama.
 
 ```toml
 [providers.anthropic]
 type = "anthropic"
 api_key = "${ANTHROPIC_API_KEY}"
-```
 
-Supported models:
-
-| Model | ID | Context | Notes |
-|-------|-----|---------|-------|
-| Claude Sonnet 4 | `claude-sonnet-4-20250514` | 200K | Best balance of quality and cost |
-| Claude Haiku 4.5 | `claude-haiku-4-5-20251001` | 200K | Fastest, most cost-effective |
-
-Usage:
-
-```bash
-forgetest run --eval-set eval-sets/rust-basics.toml \
-  --models anthropic/claude-sonnet-4-20250514
-```
-
-## OpenAI
-
-```toml
 [providers.openai]
 type = "openai"
 api_key = "${OPENAI_API_KEY}"
-```
 
-Optionally set a custom base URL for OpenAI-compatible APIs:
-
-```toml
-[providers.openai]
-type = "openai"
-api_key = "${OPENAI_API_KEY}"
-base_url = "https://api.custom-provider.com"
-```
-
-Supported models:
-
-| Model | ID | Context | Notes |
-|-------|-----|---------|-------|
-| GPT-4.1 | `gpt-4.1` | 1M | Most capable |
-| GPT-4.1 Mini | `gpt-4.1-mini` | 1M | Good balance |
-| GPT-4.1 Nano | `gpt-4.1-nano` | 1M | Fastest |
-
-## Ollama (Local Models)
-
-```toml
 [providers.ollama]
 type = "ollama"
 base_url = "http://localhost:11434"
 ```
 
-Ollama runs models locally. Install Ollama and pull a model first:
+Use exact model IDs appropriate to the provider at run time:
 
 ```bash
-ollama pull codellama
-ollama pull deepseek-coder
+forgetest run \
+  --eval-set eval-sets/rust-basics.toml \
+  --models anthropic/MODEL,openai/MODEL
 ```
 
-Then use it:
+`forgetest list-models` queries Ollama asynchronously. Static provider entries
+are informational and should not be treated as a vendor availability promise.
 
-```bash
-forgetest run --eval-set eval-sets/rust-basics.toml \
-  --models ollama/codellama
-```
+## Credential References
 
-Available models are discovered dynamically via `ollama list`.
+Only exact documented credential references are interpolated:
 
-### Timeout Note
+- `${OPENAI_API_KEY}`
+- `${FORGETEST_OPENAI_KEY}`
+- `${ANTHROPIC_API_KEY}`
+- `${FORGETEST_ANTHROPIC_KEY}`
 
-Local models can be slow. The default Ollama timeout is 300 seconds per request. If you're running larger models, you may need to increase the `timeout_secs` in your eval cases.
-
-## Multiple Providers
-
-Compare models across providers in a single run:
-
-```bash
-forgetest run --eval-set eval-sets/rust-basics.toml \
-  --models anthropic/claude-sonnet-4-20250514,openai/gpt-4.1,ollama/codellama
-```
-
-## Listing Available Models
-
-```bash
-# List all configured providers and their models
-forgetest list-models
-
-# Filter to a specific provider
-forgetest list-models --provider anthropic
-```
-
-## Environment Variables
-
-API keys can reference environment variables using `${VAR_NAME}` syntax in `forgetest.toml`. Additionally, these env vars are checked as overrides:
-
-| Variable | Overrides |
-|----------|-----------|
-| `FORGETEST_ANTHROPIC_KEY` | `providers.anthropic.api_key` |
-| `FORGETEST_OPENAI_KEY` | `providers.openai.api_key` |
+Repository task files cannot select provider hosts, images, credentials, or
+arbitrary environment interpolation.

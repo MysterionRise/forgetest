@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "hash_algorithm": "sha256",
+  "files": [
+    {
+      "path": "report.html",
+      "sha256": "c4b42dad9976e43f068c1119fba250579ce7c7bb46b1d22049bd4b4dca75e68b",
+      "size_bytes": 12726,
+      "media_type": "text/html"
+    },
+    {
+      "path": "report.json",
+      "sha256": "2f5d758745e9095bece9427e89628a69a7c6681eea5cd48249a860cf5c034a97",
+      "size_bytes": 5519,
+      "media_type": "application/json"
+    },
+    {
+      "path": "report.sarif",
+      "sha256": "b3039c8bffff144bb6d6b72b1f984c17c59402de7c02e00a3591e0a809fd50b2",
+      "size_bytes": 402,
+      "media_type": "application/sarif+json"
+    }
+  ]
+}

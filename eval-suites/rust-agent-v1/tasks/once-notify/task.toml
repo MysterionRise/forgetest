@@ -1,0 +1,30 @@
+schema_version = 1
+id = "once-notify"
+name = "Wake waiters after one-time initialization"
+description = "Fix a missed condition-variable notification."
+category = "async_concurrency"
+language = "rust"
+prompt = "prompt.md"
+workspace = "workspace"
+grader = "grader"
+reference_patch = "reference.patch"
+timeout_secs = 240
+tags = ["concurrency", "notification"]
+
+[verifier]
+timeout_secs = 60
+
+[[verifier.checks]]
+name = "waiter notification regression"
+kind = "fail_to_pass"
+command = ["cargo", "test", "--test", "hidden", "--locked"]
+
+[[verifier.checks]]
+name = "existing library tests"
+kind = "pass_to_pass"
+command = ["cargo", "test", "--lib", "--locked"]
+
+[provenance]
+kind = "authored"
+license = "MIT OR Apache-2.0"
+audited_at = "2026-07-27"

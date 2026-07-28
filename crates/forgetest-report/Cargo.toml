@@ -1,8 +1,9 @@
 [package]
 name = "forgetest-report"
-description = "HTML/JSON/SARIF report generation for forgetest"
+description = "Evidence reports, redaction, and manifests for forgetest"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 keywords.workspace = true
@@ -16,6 +17,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
+regex = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

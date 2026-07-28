@@ -6,21 +6,23 @@ on:
   pull_request:
     branches: [master]
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
+  RUSTDOCFLAGS: -D warnings
 
 jobs:
-  check:
-    name: Check
+  quality:
+    name: Quality and supply chain
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - uses: actions/cache@v4
+      - name: Cache Cargo state
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/bin
@@ -28,18 +30,40 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-check-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-check-
+          key: ${{ runner.os }}-quality-${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml') }}
 
-      - name: Run rustfmt
+      - name: Check formatting
         run: cargo fmt --all -- --check
 
-      - name: Run clippy
-        run: cargo clippy --all-targets --workspace -- -D warnings
+      - name: Deny Clippy warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
-      - name: Build docs
-        run: cargo doc --workspace --no-deps
+      - name: Deny rustdoc warnings
+        run: cargo doc --workspace --no-deps --locked
+
+      - name: Build mdBook
+        run: |
+          if ! mdbook --version 2>/dev/null | grep -Fqx 'mdbook v0.4.52'; then
+            cargo install mdbook --version 0.4.52 --locked --force
+          fi
+          mdbook build docs --dest-dir ../target/book
+
+      - name: Dry-run workspace packages
+        run: cargo package --workspace --allow-dirty --no-verify
+
+      - name: Audit RustSec advisories
+        run: |
+          if ! cargo-audit --version 2>/dev/null | grep -Fqx 'cargo-audit 0.22.2'; then
+            cargo install cargo-audit --version 0.22.2 --locked --force
+          fi
+          cargo audit
+
+      - name: Audit licenses and sources
+        run: |
+          if ! cargo-deny --version 2>/dev/null | grep -Fqx 'cargo-deny 0.18.5'; then
+            cargo install cargo-deny --version 0.18.5 --locked --force
+          fi
+          cargo deny check licenses sources
 
   test:
     name: Test (${{ matrix.os }})
@@ -49,23 +73,100 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - uses: actions/cache@v4
+      - name: Cache Cargo state
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            ~/.cargo/bin
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-test-
+          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml') }}
 
-      - name: Run tests
-        run: cargo test --workspace
+      - name: Run all targets
+        run: cargo test --workspace --all-targets --locked
+
+  offline-proof:
+    name: Deterministic local proof
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Cache Cargo state
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-proof-${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml') }}
+
+      - name: Calibrate all 12 repository tasks
+        run: cargo run --locked --bin forgetest -- validate --suite eval-suites/rust-agent-v1/suite.toml --calibrate
+
+      - name: Verify committed sample-report contract
+        run: bash scripts/verify-sample-reports.sh
+
+      - name: Run no-key snippet demo
+        run: cargo run --locked --bin forgetest -- demo --runner local --output ./proof/snippet --format all
+
+      - name: Run no-key repository-agent demo
+        run: cargo run --locked --bin forgetest -- demo --mode repository --runner local --output ./proof/repository --format all
+
+      - name: Smoke-test installed binary
+        run: |
+          cargo install --path crates/forgetest-cli --locked --root "$RUNNER_TEMP/forgetest-install"
+          "$RUNNER_TEMP/forgetest-install/bin/forgetest" --version
+          "$RUNNER_TEMP/forgetest-install/bin/forgetest" validate --suite eval-suites/rust-agent-v1/suite.toml
+
+      - name: Upload deterministic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: forgetest-local-proof
+          path: proof/
+          if-no-files-found: error
+
+  docker-proof:
+    name: Hardened Docker proof
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Cache Cargo state
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-docker-${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml', 'docker/runner-cache/Cargo.lock') }}
+
+      - name: Build pinned verifier image
+        run: docker build -f docker/forgetest-runner-rust.Dockerfile -t forgetest-runner-rust:0.1.0 .
+
+      - name: Run gated Docker integration tests
+        run: cargo test -p forgetest-runner -p forgetest-agents --locked
+        env:
+          FORGETEST_DOCKER_TEST: "1"
+
+      - name: Run no-key Docker snippet demo
+        run: cargo run --locked --bin forgetest -- demo --runner docker --output ./proof/snippet-docker --format all
+
+      - name: Run no-key Docker repository-agent demo
+        run: cargo run --locked --bin forgetest -- demo --mode repository --runner docker --output ./proof/repository-docker --format all
+
+      - name: Upload Docker evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: forgetest-docker-proof
+          path: proof/
+          if-no-files-found: error

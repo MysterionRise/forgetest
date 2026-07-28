@@ -1,0 +1,4 @@
+[package]
+name = "ft_cargo_ok_extraction"
+version = "0.1.0"
+edition = "2021"

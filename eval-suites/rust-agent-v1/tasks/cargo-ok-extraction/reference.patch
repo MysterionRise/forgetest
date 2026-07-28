@@ -1,0 +1,21 @@
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -6,13 +6,13 @@ pub struct MarkerOptions {
+     pub create_new: bool,
+ }
+ 
+-pub fn should_extract(_entry_path: &Path) -> bool {
+-    true
++pub fn should_extract(entry_path: &Path) -> bool {
++    entry_path.file_name().is_none_or(|name| name != ".cargo-ok")
+ }
+ 
+ pub fn marker_options() -> MarkerOptions {
+     MarkerOptions {
+-        create: true,
+-        create_new: false,
++        create: false,
++        create_new: true,
+     }
+ }

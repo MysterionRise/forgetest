@@ -10,10 +10,13 @@
 # Forgetest output
 forgetest-results/
 *.sarif
+!examples/reports/**/*.sarif
 
 # IDE
 .idea/
 .vscode/
+.claude/
+.codex/
 *.swp
 *.swo
 

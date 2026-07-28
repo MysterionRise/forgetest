@@ -1,5 +1,10 @@
+pub mod agents;
 pub mod compare;
+pub mod demo;
+pub mod harbor;
 pub mod init;
 pub mod list_models;
+pub mod redact;
+pub mod repository_run;
 pub mod run;
 pub mod validate;

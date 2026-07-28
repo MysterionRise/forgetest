@@ -1,0 +1,32 @@
+schema_version = 1
+id = "bytes-owner-drop"
+name = "Release owner during byte conversion"
+description = "Reduced adaptation of tokio-rs/bytes issue 773."
+category = "bug_fix"
+language = "rust"
+prompt = "prompt.md"
+workspace = "workspace"
+grader = "grader"
+reference_patch = "reference.patch"
+timeout_secs = 180
+tags = ["snapshot", "ownership", "resource-leak"]
+
+[verifier]
+timeout_secs = 60
+
+[[verifier.checks]]
+name = "owner drop regression"
+kind = "fail_to_pass"
+command = ["cargo", "test", "--test", "hidden", "--locked"]
+
+[[verifier.checks]]
+name = "existing library tests"
+kind = "pass_to_pass"
+command = ["cargo", "test", "--lib", "--locked"]
+
+[provenance]
+kind = "snapshot"
+license = "MIT"
+source_url = "https://github.com/tokio-rs/bytes/commit/36675436cc343fc0e828033278d668020bd897b9"
+source_revision = "36675436cc343fc0e828033278d668020bd897b9"
+audited_at = "2026-07-27"

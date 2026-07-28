@@ -1,4 +1,4 @@
-//! Test execution for sandboxed Cargo projects.
+//! Test execution for temporary Cargo projects.
 
 use std::process::Stdio;
 use std::time::Instant;
@@ -8,37 +8,67 @@ use tokio::process::Command;
 
 use forgetest_core::results::{TestFailure, TestResult};
 
-use crate::sandbox::Sandbox;
+use crate::cargo_project::CargoProject;
+use crate::repository_grader::{configure_process_group, run_bounded};
 
-/// Run tests in the sandbox.
-pub async fn run_tests(sandbox: &Sandbox) -> Result<TestResult> {
+const MAX_OUTPUT_BYTES: usize = 4 * 1024 * 1024;
+
+/// Run tests in the temporary project.
+pub async fn run_tests(sandbox: &CargoProject) -> Result<TestResult> {
     let start = Instant::now();
 
     let mut cmd = Command::new("cargo");
     cmd.arg("test")
         .current_dir(sandbox.work_dir())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    sandbox.configure_command(&mut cmd);
+    configure_process_group(&mut cmd);
 
-    for (key, val) in sandbox.build_env() {
-        cmd.env(&key, &val);
-    }
-
-    let result = tokio::time::timeout(sandbox.timeout(), cmd.output())
+    let result = run_bounded(cmd, sandbox.timeout(), MAX_OUTPUT_BYTES)
         .await
-        .context("test execution timed out")?
-        .context("failed to run cargo test")?;
+        .context("failed to run bounded cargo test")?;
 
     let duration_ms = start.elapsed().as_millis() as u64;
     let stdout = String::from_utf8_lossy(&result.stdout);
     let stderr = String::from_utf8_lossy(&result.stderr);
     let combined = format!("{stdout}\n{stderr}");
 
-    parse_test_output(&combined, duration_ms)
+    parse_test_command_output(&combined, duration_ms, result.status.success())
+}
+
+/// Parse test output and distinguish assertion failures from Cargo/runtime
+/// failures that occurred before a test result was produced.
+pub(crate) fn parse_test_command_output(
+    output: &str,
+    duration_ms: u64,
+    command_succeeded: bool,
+) -> Result<TestResult> {
+    let mut result = parse_test_output(output, duration_ms)?;
+    if !command_succeeded && result.failed == 0 {
+        let excerpt: String = output.chars().take(2048).collect();
+        if output.contains("could not compile")
+            || output.lines().any(|line| line.starts_with("error[E"))
+        {
+            result.failed = 1;
+            result.failures.push(TestFailure {
+                name: "test compilation".into(),
+                message: excerpt,
+                stdout: String::new(),
+            });
+            return Ok(result);
+        }
+        anyhow::bail!(
+            "cargo test failed before producing test results: {}",
+            excerpt.trim()
+        );
+    }
+    Ok(result)
 }
 
 /// Parse cargo test output in the stable human-readable format.
-fn parse_test_output(output: &str, duration_ms: u64) -> Result<TestResult> {
+pub(crate) fn parse_test_output(output: &str, duration_ms: u64) -> Result<TestResult> {
     let mut passed = 0u32;
     let mut failed = 0u32;
     let mut ignored = 0u32;
@@ -232,5 +262,46 @@ test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; fini
         let result = parse_test_output(output, 100).unwrap();
         assert_eq!(result.passed, 2);
         assert_eq!(result.ignored, 1);
+    }
+
+    #[test]
+    fn command_failure_before_test_execution_is_an_error() {
+        let error = parse_test_command_output(
+            "error: could not execute test binary: Permission denied",
+            10,
+            false,
+        )
+        .unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("failed before producing test results"));
+    }
+
+    #[test]
+    fn test_compilation_failure_is_a_failed_test_result() {
+        let result = parse_test_command_output(
+            "error[E0425]: cannot find function `add`\nerror: could not compile `eval_target` (lib test)",
+            10,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(result.passed, 0);
+        assert_eq!(result.failed, 1);
+        assert_eq!(result.failures[0].name, "test compilation");
+        assert!(result.failures[0].message.contains("E0425"));
+    }
+
+    #[test]
+    fn command_failure_with_test_summary_remains_a_test_result() {
+        let result = parse_test_command_output(
+            "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out",
+            10,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(result.failed, 1);
     }
 }

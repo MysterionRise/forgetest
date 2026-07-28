@@ -1,0 +1,154 @@
+{
+  "schema_version": 2,
+  "id": "fbfb7e8e-05a4-4db8-9b3c-b0adadb7779c",
+  "created_at": "2026-07-27T18:13:37.375515Z",
+  "suite": {
+    "id": "forgetest-repository-demo",
+    "name": "forgetest Repository Demo",
+    "digest": "b145d541331a11a5768dd294b829d59d58fca9b7b33bb7144497d8c16c1d8904",
+    "task_digests": {
+      "fix-add": "9ad170e02e5fb910ae8322b0c72c85e09eca92dfd7ab215d9ff6a064f18c0f71"
+    }
+  },
+  "policy": {
+    "schema_version": 1,
+    "profile": "offline-demo",
+    "agent_environment": "host-trusted",
+    "verifier_environment": "local",
+    "verifier_image": null,
+    "network": "agent=none;verifier=host-trusted",
+    "parameters": {
+      "trials": 1,
+      "parallelism": 1,
+      "agent_images": {},
+      "agent_timeout_secs": 60,
+      "max_agent_output_bytes": 1048576,
+      "max_agent_tokens": null,
+      "max_agent_cost_usd": null,
+      "agent_retries": 0,
+      "max_workspace_files": 10000,
+      "max_workspace_bytes": 67108864,
+      "max_patch_bytes": 4194304,
+      "verifier_max_output_bytes": 1048576,
+      "agent_container": null,
+      "verifier_container": null
+    },
+    "digest": "951d79ff772b19ec43e5f63f444dba5d53ceb41b24a9814d0f301923c1a74137"
+  },
+  "agents": [
+    {
+      "adapter": "scripted",
+      "adapter_version": "0.1.0",
+      "executable_sha256": null,
+      "model": "deterministic-repository-demo",
+      "configuration_digest": "410c1f3a024b2e30aecc3f40ad374a5ccf2c9764cb9211862957ebc9ff384866"
+    }
+  ],
+  "trials": [
+    {
+      "id": "2776d016-0417-4cb8-97e4-694bdd0d5594",
+      "task_id": "fix-add",
+      "task_digest": "9ad170e02e5fb910ae8322b0c72c85e09eca92dfd7ab215d9ff6a064f18c0f71",
+      "agent": {
+        "adapter": "scripted",
+        "adapter_version": "0.1.0",
+        "executable_sha256": null,
+        "model": "deterministic-repository-demo",
+        "configuration_digest": "410c1f3a024b2e30aecc3f40ad374a5ccf2c9764cb9211862957ebc9ff384866"
+      },
+      "environment_digest": "45e5c490f561909055e6882129dda2f85170af9e3c7d559afe2c13644d39ee71",
+      "trial_index": 1,
+      "agent_attempts": 1,
+      "status": "passed",
+      "changed_files": [
+        {
+          "path": "src/lib.rs",
+          "kind": "modified",
+          "before_sha256": "b246c32753683c489f445af5ddc91a63fa3bd1e75dcf769c2599c19c2505fb92",
+          "after_sha256": "a33db20869249b28af01c8e0cde00b70a603f5aa4bb715aae2044b84dbdd9c8e"
+        }
+      ],
+      "patch": "diff --git a/src/lib.rs b/src/lib.rs\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1,1 +1,1 @@\n-pub fn add(a: i32, b: i32) -> i32 { a - b }\n+pub fn add(a: i32, b: i32) -> i32 { a + b }\n",
+      "grader": {
+        "success": true,
+        "exit_code": 0,
+        "stdout": "== verifier command ==\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 1 test\ntest handles_positive_and_negative_values ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+        "stderr": "== verifier command ==\n   Compiling forgetest-demo-repository v0.1.0 (/private$OUTPUT/raw/trials/2776d016-0417-4cb8-97e4-694bdd0d5594/verifier-workspace)\nwarning: output of `xcrun` while finding MacOSX.sdk\n  |\n  = note: xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n\nwarning: `forgetest-demo-repository` (lib test) generated 1 warning\nwarning: `forgetest-demo-repository` (test \"hidden\") generated 1 warning (1 duplicate)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.05s\n     Running unittests src/lib.rs ($OUTPUT/raw/trials/2776d016-0417-4cb8-97e4-694bdd0d5594/verifier-workspace/target-check-0/debug/deps/forgetest_demo_repository-eaf1022392f96aa4)\n     Running tests/hidden.rs ($OUTPUT/raw/trials/2776d016-0417-4cb8-97e4-694bdd0d5594/verifier-workspace/target-check-0/debug/deps/hidden-39de37f596538c45)\n",
+        "duration_ms": 1779,
+        "checks": [
+          {
+            "name": "verifier command",
+            "kind": "other",
+            "passed": true,
+            "details": "exit_code=Some(0); stdout_bytes=274; stderr_bytes=954"
+          }
+        ]
+      },
+      "events": [
+        {
+          "sequence": 1,
+          "timestamp": "2026-07-27T18:13:35.591413Z",
+          "kind": "started",
+          "message": "started",
+          "raw": null
+        },
+        {
+          "sequence": 2,
+          "timestamp": "2026-07-27T18:13:35.591772Z",
+          "kind": "tool_result",
+          "message": "tool_result",
+          "raw": null
+        },
+        {
+          "sequence": 3,
+          "timestamp": "2026-07-27T18:13:35.591800Z",
+          "kind": "completed",
+          "message": "completed",
+          "raw": null
+        }
+      ],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cached_tokens": 0,
+        "estimated_cost_usd": 0.0
+      },
+      "duration_ms": 1784,
+      "termination_reason": "completed",
+      "artifacts": {},
+      "error": null
+    }
+  ],
+  "aggregate": {
+    "per_agent": {
+      "scripted/deterministic-repository-demo@0.1.0#410c1f3a024b2e30aecc3f40ad374a5ccf2c9764cb9211862957ebc9ff384866": {
+        "scheduled": 1,
+        "passed": 1,
+        "failed": 0,
+        "task_failures": 0,
+        "agent_errors": 0,
+        "environment_errors": 0,
+        "grader_errors": 0,
+        "timeouts": 0,
+        "cancelled": 0,
+        "infrastructure_errors": 0,
+        "observed_resolution_rate": 1.0,
+        "valid_trial_resolution_rate": 1.0,
+        "wilson_95_low": 0.20654931437723745,
+        "wilson_95_high": 1.0,
+        "pass_at_1": 1.0,
+        "pass_power_3": 0.0,
+        "total_cost_usd": 0.0,
+        "total_duration_ms": 1784
+      }
+    },
+    "pairwise": []
+  },
+  "redaction": {
+    "redacted": true,
+    "redacted_at": "2026-07-27T18:13:37.549748Z",
+    "rules_version": "1",
+    "replacements": 10
+  },
+  "duration_ms": 1785
+}

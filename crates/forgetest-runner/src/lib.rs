@@ -1,15 +1,19 @@
-//! forgetest-runner — Sandboxed compilation and test execution.
+//! forgetest-runner - temporary local projects and hardened Docker execution.
 //!
-//! Creates isolated Cargo projects for each eval, compiles generated code,
+//! Creates fresh Cargo projects for each eval, compiles generated code,
 //! runs tests, and collects clippy diagnostics.
 
+pub mod calibration;
+pub mod cargo_project;
 pub mod clippy;
 pub mod compiler;
-pub mod sandbox;
+pub mod docker;
+pub mod repository_grader;
 pub mod test_runner;
+mod toolchain;
 
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -17,17 +21,20 @@ use uuid::Uuid;
 
 use forgetest_core::model::{EvalCase, Language};
 use forgetest_core::results::{
-    ClippyResult, CompilationResult, EvalResult, TestResult, TimingInfo, TokenUsage,
+    ClippyResult, CompilationResult, EvalResult, Score, TestResult, TimingInfo, TokenUsage,
 };
 use forgetest_core::traits::{ClippyRequest, CodeRunner, CompileRequest, Dependency, TestRequest};
 
-/// Local code runner that uses sandboxed Cargo projects.
+pub use docker::{ensure_docker_dependency_allowed, DockerRunner, DockerRunnerConfig};
+pub use repository_grader::{DockerRepositoryGrader, DockerVerifierConfig, LocalRepositoryGrader};
+
+/// Trusted local code runner that uses temporary Cargo projects.
 pub struct LocalRunner {
     /// Shared target directory for caching compiled dependencies.
     shared_target_dir: PathBuf,
     /// Default timeout for compilation and tests.
     default_timeout: Duration,
-    /// Default dependencies added to every sandbox.
+    /// Default dependencies added to every temporary project.
     default_dependencies: Vec<Dependency>,
 }
 
@@ -50,20 +57,24 @@ impl LocalRunner {
         self
     }
 
-    fn create_sandbox(&self, language: Language, timeout_secs: u64) -> Result<sandbox::Sandbox> {
+    fn create_project(
+        &self,
+        language: Language,
+        timeout_secs: u64,
+    ) -> Result<cargo_project::CargoProject> {
         let timeout = if timeout_secs > 0 {
             Duration::from_secs(timeout_secs)
         } else {
             self.default_timeout
         };
-        sandbox::Sandbox::new(language, timeout, &self.shared_target_dir)
+        cargo_project::CargoProject::new(language, timeout, &self.shared_target_dir)
     }
 }
 
 #[async_trait]
 impl CodeRunner for LocalRunner {
     async fn compile(&self, request: &CompileRequest) -> Result<CompilationResult> {
-        let sandbox = self.create_sandbox(request.language, request.timeout_secs)?;
+        let sandbox = self.create_project(request.language, request.timeout_secs)?;
         sandbox.write_source(&request.code)?;
         for dep in self
             .default_dependencies
@@ -76,7 +87,7 @@ impl CodeRunner for LocalRunner {
     }
 
     async fn run_tests(&self, request: &TestRequest) -> Result<TestResult> {
-        let sandbox = self.create_sandbox(request.language, request.timeout_secs)?;
+        let sandbox = self.create_project(request.language, request.timeout_secs)?;
         sandbox.write_source(&request.code)?;
         sandbox.write_test(&request.test_code)?;
         for dep in self
@@ -91,7 +102,7 @@ impl CodeRunner for LocalRunner {
     }
 
     async fn run_clippy(&self, request: &ClippyRequest) -> Result<ClippyResult> {
-        let sandbox = self.create_sandbox(request.language, request.timeout_secs)?;
+        let sandbox = self.create_project(request.language, request.timeout_secs)?;
         sandbox.write_source(&request.code)?;
         for dep in self
             .default_dependencies
@@ -117,23 +128,24 @@ pub async fn run_eval(
     attempt: u32,
     run_id: Uuid,
 ) -> Result<EvalResult> {
+    let execution_start = Instant::now();
     let language = case.language.unwrap_or(Language::Rust);
     let timeout_secs = case.timeout_secs.unwrap_or(60);
-    let sandbox = runner.create_sandbox(language, timeout_secs)?;
+    let project = runner.create_project(language, timeout_secs)?;
 
-    sandbox.write_source(generated_code)?;
+    project.write_source(generated_code)?;
 
     // Compile
-    let compilation = compiler::compile(&sandbox).await?;
+    let compilation = compiler::compile(&project).await?;
     let compilation_ms = compilation.duration_ms;
 
     // Run tests if compilation succeeded and tests are expected
     let test_execution = if compilation.success && case.expectations.should_pass_tests {
         if let Some(test_file) = &case.expectations.test_file {
-            sandbox.write_test(test_file)?;
+            project.write_test(test_file)?;
             // Need to recompile with tests
-            let _recompile = compiler::compile(&sandbox).await?;
-            Some(test_runner::run_tests(&sandbox).await?)
+            let _recompile = compiler::compile(&project).await?;
+            Some(test_runner::run_tests(&project).await?)
         } else {
             None
         }
@@ -144,14 +156,14 @@ pub async fn run_eval(
 
     // Run clippy if compilation succeeded
     let clippy_result = if compilation.success {
-        Some(clippy::run_clippy(&sandbox).await?)
+        Some(clippy::run_clippy(&project).await?)
     } else {
         None
     };
 
-    let total_ms = llm_request_ms + compilation_ms + test_execution_ms;
+    let total_ms = llm_request_ms + execution_start.elapsed().as_millis() as u64;
 
-    Ok(EvalResult {
+    let mut result = EvalResult {
         case_id: case.id.clone(),
         model: model.to_string(),
         provider: provider.to_string(),
@@ -166,9 +178,15 @@ pub async fn run_eval(
             total_ms,
         },
         token_usage,
+        score: None,
+        status: Default::default(),
+        error: None,
         attempt,
         run_id,
-    })
+    };
+    result.score = Some(Score::compute(&result, &case.expectations));
+
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -249,6 +267,39 @@ mod tests {
 
         let result = runner.run_tests(&request).await.unwrap();
         assert_eq!(result.failed, 1);
+    }
+
+    #[tokio::test]
+    async fn local_runner_does_not_inherit_unapproved_environment() {
+        const SECRET_NAME: &str = "FORGETEST_TEST_UNAPPROVED_SECRET";
+        std::env::set_var(SECRET_NAME, "must-not-reach-generated-code");
+
+        let target = tempfile::tempdir().unwrap();
+        let runner = LocalRunner::new(target.path().to_path_buf());
+        let request = TestRequest {
+            code: "pub fn placeholder() {}".to_string(),
+            test_code: format!(
+                r#"
+#[cfg(test)]
+mod tests {{
+    #[test]
+    fn inherited_secret_is_absent() {{
+        assert!(std::env::var("{SECRET_NAME}").is_err());
+    }}
+}}
+"#
+            ),
+            language: Language::Rust,
+            dependencies: vec![],
+            timeout_secs: 120,
+        };
+
+        let result = runner.run_tests(&request).await;
+        std::env::remove_var(SECRET_NAME);
+        let result = result.unwrap();
+
+        assert_eq!(result.failed, 0);
+        assert_eq!(result.passed, 1);
     }
 
     #[tokio::test]

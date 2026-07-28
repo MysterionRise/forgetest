@@ -1,0 +1,30 @@
+schema_version = 1
+id = "circuit-breaker"
+name = "Complete circuit breaker transitions"
+description = "Implement failure threshold and recovery state."
+category = "feature"
+language = "rust"
+prompt = "prompt.md"
+workspace = "workspace"
+grader = "grader"
+reference_patch = "reference.patch"
+timeout_secs = 180
+tags = ["feature", "resilience"]
+
+[verifier]
+timeout_secs = 60
+
+[[verifier.checks]]
+name = "breaker transition contract"
+kind = "fail_to_pass"
+command = ["cargo", "test", "--test", "hidden", "--locked"]
+
+[[verifier.checks]]
+name = "existing library tests"
+kind = "pass_to_pass"
+command = ["cargo", "test", "--lib", "--locked"]
+
+[provenance]
+kind = "authored"
+license = "MIT OR Apache-2.0"
+audited_at = "2026-07-27"

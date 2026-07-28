@@ -1,0 +1,32 @@
+schema_version = 1
+id = "mpsc-close-permit"
+name = "Preserve outstanding channel permits"
+description = "Reduced adaptation of Tokio pull request 8074."
+category = "async_concurrency"
+language = "rust"
+prompt = "prompt.md"
+workspace = "workspace"
+grader = "grader"
+reference_patch = "reference.patch"
+timeout_secs = 240
+tags = ["snapshot", "concurrency", "state-machine"]
+
+[verifier]
+timeout_secs = 60
+
+[[verifier.checks]]
+name = "closed channel permit regression"
+kind = "fail_to_pass"
+command = ["cargo", "test", "--test", "hidden", "--locked"]
+
+[[verifier.checks]]
+name = "existing library tests"
+kind = "pass_to_pass"
+command = ["cargo", "test", "--lib", "--locked"]
+
+[provenance]
+kind = "snapshot"
+license = "MIT"
+source_url = "https://github.com/tokio-rs/tokio/commit/9fccf5339d41c1f2f863f97b9133bc8a5a10bc28"
+source_revision = "9fccf5339d41c1f2f863f97b9133bc8a5a10bc28"
+audited_at = "2026-07-27"

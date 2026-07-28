@@ -1,230 +1,320 @@
 # forgetest
 
-> LLM Code-Quality Eval Harness for Rust — "pytest for LLM outputs"
-
-CI-ready, Rust-native, blazing-fast evaluation framework for benchmarking LLM code generation quality.
+Execution-backed regression and evidence harness for Rust coding agents.
 
 [![CI](https://github.com/MysterionRise/forgetest/actions/workflows/ci.yml/badge.svg)](https://github.com/MysterionRise/forgetest/actions/workflows/ci.yml)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue)](#license)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
-## Features
+`forgetest` gives a coding agent a fresh repository task, records a typed event
+trace under output-byte and normalized-event limits, captures the resulting
+filesystem patch independently of Git, and grades that patch in a clean
+verification workspace. It preserves the original provider-based snippet
+evaluator, but repository-level agent trials are the primary v1 direction.
 
-- **Multi-provider support** — Anthropic, OpenAI, and Ollama (local models)
-- **Sandboxed execution** — Generated code compiles and runs in isolated temp projects
-- **Pass@k scoring** — Standard unbiased Pass@k estimator from the Codex paper
-- **Regression detection** — Compare reports across runs to catch quality drops
-- **Multiple output formats** — JSON, HTML (self-contained), SARIF (GitHub Code Scanning)
-- **Parallel evaluation** — Configurable concurrency with semaphore-based limiting
-- **TOML eval cases** — Declarative eval definitions with test expectations
-- **30 built-in eval cases** — Basics, algorithms, and async Rust tasks
+The project is designed to answer a narrow engineering question:
 
-## Quick Start
+> Did this exact agent, model, policy, and task corpus produce a verified change,
+> and can another reviewer inspect the evidence?
+
+## Status
+
+Implemented:
+
+- Strict, digest-addressed repository suites and a calibrated 12-task Rust corpus.
+- Generic command, Codex CLI, Claude Code, and deterministic scripted adapters.
+- Local development trials and opt-in ephemeral agent containers.
+- Independent hidden-grader overlay in a fresh local or hardened Docker verifier.
+- Typed JSONL traces, trusted filesystem patches, explicit budgets, retries, and
+  Unix process-group cleanup plus forced Docker-container cleanup.
+- Report schema v2 with every scheduled outcome, Wilson intervals, pass@1,
+  pass^3, paired bootstrap comparisons, cost, timing, and policy identity.
+- Private raw bundles, deterministic SHA-256 artifact inventories, and a
+  redacted public bundle.
+- Exact benchmark lock generation and preflight checks for agent images,
+  executable hashes, CLI versions, models, effort, verifier image, and policy.
+- Legacy snippet reports and commands, including old report deserialization.
+
+Not claimed:
+
+- The planned 72-trial Codex versus Claude study has not been run or published.
+- Deterministic scripted demos are not model benchmarks.
+- v1 does not claim safe execution of hostile repositories.
+- Content identities and checksums are provenance evidence, not proof that two
+  stochastic model calls will return the same output.
+
+## Try It Without Keys
+
+The repository demo exercises materialization, agent edits, hidden grading,
+patch capture, redaction, HTML/SARIF rendering, and evidence manifests:
 
 ```bash
-# Install from source
-cargo install --path crates/forgetest-cli
-
-# Initialize a project with sample config and eval set
-forgetest init
-
-# Edit forgetest.toml with your API keys, then validate:
-forgetest validate --eval-set eval-sets/rust-basics.toml
-
-# Run evaluations
-forgetest run --eval-set eval-sets/rust-basics.toml --models anthropic/claude-sonnet-4-20250514
+cargo run --locked --bin forgetest -- \
+  demo --mode repository --runner local \
+  --output ./forgetest-results --format all
 ```
 
-### Example Output
+Open `forgetest-results/public/report.html`. The agent is scripted and
+deterministic; the compile and test work is real.
 
-```
-forgetest v0.1.0 — Running 15 eval cases x 1 models x 1 attempts
+The legacy snippet loop is still available:
 
-  Starting: claude-sonnet-4-20250514 :: fibonacci (attempt 1)
-  Done: claude-sonnet-4-20250514 :: fibonacci [1] compile OK tests 3/3 (2450ms)
-  Starting: claude-sonnet-4-20250514 :: is_palindrome (attempt 1)
-  Done: claude-sonnet-4-20250514 :: is_palindrome [1] compile OK tests 4/4 (1820ms)
-  ...
-
-Complete: 15/15 succeeded, 0 failed (34.2s)
-
- Model            | Pass@1  | Compile % | Test Pass % | Cost    | Latency
- claude-sonnet-4  | 93.3%   | 100.0%    | 96.0%       | $0.0842 | 2280ms
+```bash
+cargo run --locked --bin forgetest -- \
+  demo --runner local --output ./snippet-results --format all
 ```
 
-## Architecture
+## Docker Proof
+
+Build the pinned Rust verifier image, then run both no-key paths:
+
+```bash
+docker build \
+  -f docker/forgetest-runner-rust.Dockerfile \
+  -t forgetest-runner-rust:0.1.0 .
+
+cargo run --locked --bin forgetest -- \
+  demo --mode repository --runner docker \
+  --output ./repository-docker-results --format all
+
+cargo run --locked --bin forgetest -- \
+  demo --runner docker \
+  --output ./snippet-docker-results --format all
+```
+
+The Docker verifier uses a read-only root filesystem, non-root UID, no network,
+no capabilities, `no-new-privileges`, tmpfs build output, resource limits, and
+only the per-trial verification workspace mount. See [SECURITY.md](SECURITY.md)
+for guarantees and non-guarantees.
+
+## Calibrated Corpus
+
+`eval-suites/rust-agent-v1` contains 12 repository tasks:
+
+- 8 authored fixtures.
+- 4 fixture-focused adaptations of permissively licensed upstream fixes from
+  Cargo, Tokio, bytes, and ripgrep, with source revision and audit metadata.
+- Bug fixes, features, API migrations, async/concurrency, and
+  security/robustness work.
+- A fail-to-pass hidden check and pass-to-pass regression check for every task.
+- A reference patch used only as a calibration oracle.
+
+Prove that every null patch fails and every reference patch passes:
+
+```bash
+cargo run --locked --bin forgetest -- \
+  validate --suite eval-suites/rust-agent-v1/suite.toml --calibrate
+```
+
+Calibration runs trusted suite commands on the host. It is appropriate for the
+audited bundled corpus, not arbitrary downloaded suites.
+
+## Real Agent Trials
+
+Local development mode runs installed agent CLIs under an explicit environment
+allowlist and uses the selected verifier:
+
+```bash
+cargo run --locked --bin forgetest -- \
+  agents doctor --agents codex/MODEL,claude/MODEL
+
+cargo run --locked --bin forgetest -- \
+  run --suite eval-suites/rust-agent-v1/suite.toml \
+  --agents codex/MODEL,claude/MODEL \
+  --trials 1 --profile development --runner docker \
+  --output ./agent-results --format all
+```
+
+Published benchmark mode requires immutable agent and verifier images. First
+create an exact lock:
+
+```bash
+cargo run --locked --bin forgetest -- agents lock \
+  --suite eval-suites/rust-agent-v1/suite.toml \
+  --agent codex/MODEL=registry.example/codex@sha256:DIGEST \
+  --agent claude/MODEL=registry.example/claude@sha256:DIGEST \
+  --effort codex=high \
+  --effort claude=high \
+  --verifier-image registry.example/forgetest-runner-rust@sha256:DIGEST \
+  --trials 3 \
+  --output benchmark.lock.toml
+```
+
+Then run the sealed policy:
+
+```bash
+cargo run --locked --bin forgetest -- \
+  run --suite eval-suites/rust-agent-v1/suite.toml \
+  --agents codex,claude --trials 3 --profile benchmark \
+  --benchmark-lock benchmark.lock.toml \
+  --output ./study-run --format all
+```
+
+The lock command performs a credential-free, network-disabled image preflight.
+The benchmark run rejects requested-model, command-profile, CLI, executable,
+image, suite, and policy drift. It cannot independently detect a provider-side
+model substitution unless the vendor exposes that identity in its events.
+
+Recheck a saved lock without exposing credentials:
+
+```bash
+forgetest agents doctor --benchmark-lock benchmark.lock.toml
+```
+
+The required agent-image runtime contract is documented in
+[docker/agents/README.md](docker/agents/README.md).
+
+## Trial Lifecycle
 
 ```mermaid
-graph TD
-    A[TOML Eval Cases] --> B[forgetest-cli]
-    B --> C[forgetest-core<br/>Engine & Scoring]
-    C --> D[forgetest-providers<br/>Anthropic / OpenAI / Ollama]
-    C --> E[forgetest-runner<br/>Sandbox Compile & Test]
-    C --> F[forgetest-report<br/>HTML / JSON / SARIF]
+flowchart LR
+    A["Strict suite and policy validation"] --> B["Fresh visible workspace"]
+    B --> C["Bounded agent execution and live JSONL trace"]
+    C --> D["Trusted filesystem snapshot and patch"]
+    D --> E["Fresh verification workspace"]
+    E --> F["Hidden grader overlay"]
+    F --> G["Network-disabled verifier"]
+    G --> H["Atomic trial record"]
+    H --> I["Raw and redacted evidence bundles"]
 ```
 
-```
-forgetest/
-├── crates/
-│   ├── forgetest-core/        # Eval engine, traits, scoring
-│   ├── forgetest-runner/      # Sandboxed compilation & test execution
-│   ├── forgetest-providers/   # LLM provider integrations
-│   ├── forgetest-report/      # HTML/JSON/SARIF report generation
-│   └── forgetest-cli/         # CLI binary
-├── eval-sets/                 # Built-in eval case collections
-│   ├── rust-basics.toml       # 15 fundamental Rust tasks
-│   ├── rust-algorithms.toml   # 10 advanced algorithm tasks
-│   └── rust-async.toml        # 5 async Rust tasks
-├── benches/                   # Criterion benchmarks
-├── docs/                      # mdBook documentation
-└── examples/
-```
+Each trial ends as one of `passed`, `failed`, `agent_error`,
+`environment_error`, `grader_error`, `timeout`, or `cancelled`. Infrastructure
+errors are reported separately from task failures.
 
-## Writing Eval Cases
+## Evidence
 
-Eval cases are defined in TOML. Each case includes a prompt, expected behavior, and a test file:
+With `--format all`, raw bundles contain:
 
-```toml
-[eval_set]
-id = "my-evals"
-name = "My Eval Set"
-default_language = "rust"
+- `report.json`, self-contained `report.html`, and deterministic-only SARIF.
+- Per-trial `trace.jsonl`, `changes.patch`, and grader stdout/stderr.
+- `artifact-manifest.json` with SHA-256 and size for every bundle file.
 
-[[cases]]
-id = "fibonacci"
-name = "Fibonacci function"
-prompt = """
-Write a Rust function `fn fibonacci(n: u64) -> u64` that returns
-the nth Fibonacci number using an iterative approach.
-"""
-tags = ["algorithms"]
-
-[cases.expectations]
-should_compile = true
-should_pass_tests = true
-test_file = """
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_fib() {
-        assert_eq!(fibonacci(0), 0);
-        assert_eq!(fibonacci(10), 55);
-    }
-}
-"""
-expected_functions = ["fibonacci"]
-```
-
-See the [full documentation](docs/src/writing-eval-cases.md) for all options.
-
-## CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `forgetest run` | Run evaluations against LLM models |
-| `forgetest compare` | Compare two reports for regressions |
-| `forgetest validate` | Validate eval set TOML files |
-| `forgetest list-models` | List available models from providers |
-| `forgetest init` | Create starter config and example eval set |
-
-### Common Usage
+Public bundles remove known secrets, credential-shaped values, configured host
+paths, raw vendor events, free-form model messages, private reasoning fields,
+private artifact references, and free-form text from retained event categories.
+Event type, timestamp, and sequence remain available for public timelines:
 
 ```bash
-# Run with multiple models
-forgetest run --eval-set eval-sets/ \
-  --models anthropic/claude-sonnet-4-20250514,openai/gpt-4.1 \
-  --pass-k 1,5 --parallelism 8
-
-# Compare runs for regressions
-forgetest compare --baseline results/baseline.json --current results/latest.json \
-  --fail-on-regression
-
-# Output in multiple formats
-forgetest run --eval-set eval-sets/rust-basics.toml --format all --output ./results
+forgetest redact \
+  --input ./study-run/raw/report.json \
+  --output ./study-run/public \
+  --format all
 ```
 
-## Scoring
+Repository run, demo, and redaction output directories must be absent or empty.
+This prevents files from an older run entering a new artifact inventory.
 
-forgetest uses a weighted scoring system:
+Schema v2 comparisons gate only when suite, task, and execution-policy digests
+match. `--allow-incomparable` permits an explicitly non-gating comparison.
 
-| Component | Weight | Description |
-|-----------|--------|-------------|
-| Compilation | 40% | Does the generated code compile? |
-| Tests | 50% | What fraction of tests pass? |
-| Clippy | 10% | Are there any clippy warnings? |
+## Legacy Snippet Evaluation
 
-**Pass@k** is computed using the unbiased estimator from the [Codex paper](https://arxiv.org/abs/2107.03374): given `n` samples with `c` correct, Pass@k = 1 - C(n-c, k) / C(n, k). This avoids the bias of simply averaging k attempts.
+The original provider path remains supported for small function-level tests:
 
-## Comparison with Alternatives
+```bash
+forgetest validate --eval-set eval-sets/rust-basics.toml
 
-| Feature | forgetest | EleutherAI harness | Custom scripts |
-|---------|-----------|-------------------|----------------|
-| Language | Rust-native | Python | Varies |
-| Sandboxed execution | Yes (isolated Cargo projects) | No | Manual |
-| Pass@k scoring | Built-in (unbiased estimator) | Some tasks | Manual |
-| Regression detection | Built-in (compare reports) | No | Manual |
-| SARIF output | Yes (GitHub Code Scanning) | No | No |
-| HTML reports | Yes (self-contained) | No | Manual |
-| CI integration | First-class | Possible | Manual |
-| Eval case format | TOML (declarative) | Python/YAML | Varies |
-| Multi-provider | Anthropic, OpenAI, Ollama | Varies | Manual |
-
-## Configuration
-
-Create a `forgetest.toml` in your project root (or run `forgetest init`):
-
-```toml
-[providers.anthropic]
-type = "anthropic"
-api_key = "${ANTHROPIC_API_KEY}"
-
-[providers.openai]
-type = "openai"
-api_key = "${OPENAI_API_KEY}"
-
-[providers.ollama]
-type = "ollama"
-base_url = "http://localhost:11434"
-
-default_provider = "anthropic"
-default_model = "claude-sonnet-4-20250514"
-default_temperature = 0.0
-parallelism = 4
+forgetest run \
+  --eval-set eval-sets/rust-basics.toml \
+  --models anthropic/MODEL,openai/MODEL \
+  --pass-k 1,3 --temperature 0.7 \
+  --output ./snippet-results --format all
 ```
 
-Environment variables in `${VAR_NAME}` syntax are automatically resolved.
+Snippet scoring is diagnostic, not the repository benchmark outcome:
 
-## CI Integration
+| Component | Weight |
+|---|---:|
+| Compilation | 30% |
+| Tests | 45% |
+| Structure | 15% |
+| Clippy | 10% |
 
-### GitHub Actions
+Repository tasks use binary required-check outcomes as the primary score.
 
-```yaml
-- name: Run LLM eval
-  run: |
-    forgetest run --eval-set eval-sets/rust-basics.toml \
-      --format sarif --output results/
+## Crates
 
-- name: Upload SARIF
-  uses: github/codeql-action/upload-sarif@v3
-  with:
-    sarif_file: results/
+| Crate | Responsibility |
+|---|---|
+| `forgetest-core` | Schemas, suite loading, lifecycle, statistics, comparison |
+| `forgetest-agents` | Command/Codex/Claude/scripted adapters and benchmark locks |
+| `forgetest-runner` | Local runner, Docker verifier, calibration |
+| `forgetest-providers` | Legacy Anthropic, OpenAI, Ollama, and mock providers |
+| `forgetest-report` | HTML, SARIF, redaction, evidence manifests |
+| `forgetest-cli` | Trusted configuration and user workflows |
 
-- name: Check for regressions
-  run: |
-    forgetest compare --baseline results/baseline.json \
-      --current results/latest.json --fail-on-regression
+See [ARCHITECTURE.md](ARCHITECTURE.md) for boundaries and data flow.
+
+## CI Proof Contract
+
+The checked-in workflow is configured to prove:
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --all-targets --locked
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
+mdbook build docs
+cargo audit
+cargo deny check licenses sources
 ```
 
-## Contributing
+It also calibrates all 12 tasks, smoke-tests an installed binary, builds the
+Docker verifier, runs gated Docker integration tests, executes local and Docker
+no-key demos, verifies the committed sample-report contract, and uploads their
+evidence. Tagged releases publish the verifier to GHCR by immutable digest and
+attach SHA-256 checksums, CycloneDX SBOMs, and GitHub provenance attestations.
+These become proven claims only for commits or tags with a green linked
+workflow run.
 
-Contributions are welcome! Please:
+## Harbor Bridge
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Run tests (`cargo test --all`)
-4. Run lints (`cargo clippy -- -D warnings && cargo fmt --check`)
-5. Submit a pull request
+`forgetest harbor export` and `forgetest harbor import` support only
+forgetest-marked Rust/Docker tasks. The bridge preserves prompts, visible
+workspaces, hidden graders, reference patches, and named verifier checks. It
+rejects unmarked or unsupported Harbor tasks rather than claiming general
+compatibility.
+
+## Limitations
+
+- Rust is the only fully supported v1 language.
+- Local execution is for trusted development and clears the child environment,
+  but it is not a security sandbox.
+- Agent containers need network access for hosted model APIs. The independent
+  verifier has network disabled.
+- Docker reduces host exposure but does not defend against kernel, runtime, or
+  compiler exploits.
+- Unix host-agent processes are terminated as a process group. Windows host
+  development mode can only guarantee termination of the direct child; use
+  container benchmark mode for published evidence.
+- Agent-reported token and cost fields are evidence from vendor output, not
+  independently metered billing records.
+- Exact requested model strings are locked, but server-side model routing cannot
+  be independently verified when an agent vendor does not report it.
+- `custom_check` in legacy snippet files fails as unsupported rather than
+  executing an arbitrary shell command.
+- The four upstream corpus entries are reduced adaptations, not complete
+  repository snapshots.
+
+## Study Status
+
+The v1 study protocol is `12 tasks x 2 agents x 3 trials = 72 trials`. The
+tooling computes success rates, Wilson 95% intervals, pass@1, pass^3,
+task-paired bootstrap intervals, costs, and infrastructure failures. Exact
+models and immutable images must be selected at release-candidate time. No
+paid-agent result is asserted in this repository until that dated run and its
+redacted evidence are published.
+
+## Documentation
+
+- [Architecture](ARCHITECTURE.md)
+- [Security model](SECURITY.md)
+- [CTO case study](docs/src/case-study.md)
+- [Repository suite format](docs/src/repository-suites.md)
+- [Benchmark operations](docs/src/advanced.md)
 
 ## License
 
-Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT License](LICENSE-MIT) at your option.
+Licensed under either [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at
+your option. Adapted corpus tasks retain provenance and license records in each
+`task.toml`.

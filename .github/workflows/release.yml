@@ -6,15 +6,47 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
   BINARY_NAME: forgetest
 
 jobs:
+  verify:
+    name: Verify release source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Cache Cargo state
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: linux-release-verify-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+
+      - name: Verify tag matches workspace version
+        shell: bash
+        run: |
+          EXPECTED="v$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+          test "${GITHUB_REF_NAME}" = "${EXPECTED}"
+
+      - name: Run release quality gate
+        run: |
+          cargo fmt --all --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --all-targets --locked
+          RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
+          cargo package --workspace --allow-dirty --no-verify
+
   build:
     name: Build (${{ matrix.target }})
+    needs: verify
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -29,11 +61,11 @@ jobs:
             archive: tar.gz
             use_cross: true
           - target: x86_64-apple-darwin
-            runner: macos-latest
+            runner: macos-15-intel
             archive: tar.gz
             use_cross: false
           - target: aarch64-apple-darwin
-            runner: macos-latest
+            runner: macos-15
             archive: tar.gz
             use_cross: false
           - target: x86_64-pc-windows-msvc
@@ -42,13 +74,14 @@ jobs:
             use_cross: false
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.target }}
 
-      - uses: actions/cache@v4
+      - name: Cache Cargo state
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/bin
@@ -56,87 +89,188 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-release-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-release-${{ matrix.target }}-
+          key: ${{ runner.os }}-release-${{ matrix.target }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
 
       - name: Install cross
         if: matrix.use_cross
-        run: cargo install cross --locked
+        run: cargo install cross --version 0.2.5 --locked
 
-      - name: Build release binary (cross)
+      - name: Build release binary with cross
         if: matrix.use_cross
         run: cross build --release --locked --target ${{ matrix.target }} --package forgetest-cli
 
-      - name: Build release binary (cargo)
+      - name: Build release binary with Cargo
         if: "!matrix.use_cross"
         run: cargo build --release --locked --target ${{ matrix.target }} --package forgetest-cli
 
-      - name: Package (unix)
+      - name: Package Unix binary
         if: matrix.archive == 'tar.gz'
         shell: bash
         run: |
           STAGING="${{ env.BINARY_NAME }}-${{ github.ref_name }}-${{ matrix.target }}"
           mkdir -p "$STAGING"
           cp "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}" "$STAGING/"
-          cp README.md LICENSE* "$STAGING/" 2>/dev/null || true
+          cp README.md LICENSE-MIT LICENSE-APACHE "$STAGING/"
           tar czf "$STAGING.tar.gz" "$STAGING"
           echo "ASSET=$STAGING.tar.gz" >> "$GITHUB_ENV"
 
-      - name: Package (windows)
+      - name: Package Windows binary
         if: matrix.archive == 'zip'
         shell: bash
         run: |
           STAGING="${{ env.BINARY_NAME }}-${{ github.ref_name }}-${{ matrix.target }}"
           mkdir -p "$STAGING"
           cp "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}.exe" "$STAGING/"
-          cp README.md LICENSE* "$STAGING/" 2>/dev/null || true
+          cp README.md LICENSE-MIT LICENSE-APACHE "$STAGING/"
           7z a "$STAGING.zip" "$STAGING"
           echo "ASSET=$STAGING.zip" >> "$GITHUB_ENV"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload binary archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ env.BINARY_NAME }}-${{ matrix.target }}
           path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  container:
+    name: Publish verifier image
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Resolve image name
+        id: image
+        shell: bash
+        run: |
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "name=ghcr.io/${OWNER}/forgetest-runner-rust" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "${GH_TOKEN}" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Build and push verifier image
+        id: push
+        shell: bash
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          docker build \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --label "org.opencontainers.image.version=${VERSION}" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            -f docker/forgetest-runner-rust.Dockerfile \
+            -t "${IMAGE}:${VERSION}" \
+            .
+          docker push "${IMAGE}:${VERSION}"
+          REPO_DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE}:${VERSION}")"
+          DIGEST="${REPO_DIGEST#*@}"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          printf '%s@%s\n' "${IMAGE}" "${DIGEST}" > forgetest-runner-rust-image.txt
+
+      - name: Attest verifier image
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Upload immutable image digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: forgetest-runner-rust-image
+          path: forgetest-runner-rust-image.txt
+          if-no-files-found: error
 
   release:
-    name: Create GitHub Release
-    needs: build
+    name: Attest and create GitHub release
+    needs: [build, container]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - name: Download binary archives
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
           merge-multiple: true
 
-      - name: Create release
-        uses: softprops/action-gh-release@v2
+      - name: Install CycloneDX generator
+        run: cargo install cargo-cyclonedx --version 0.5.9 --locked
+
+      - name: Generate workspace SBOMs
+        shell: bash
+        run: |
+          export SOURCE_DATE_EPOCH
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct "${GITHUB_SHA}")"
+          cargo cyclonedx --format json --all --spec-version 1.5
+          while IFS= read -r SBOM; do
+            CRATE="$(basename "$(dirname "$SBOM")")"
+            cp "$SBOM" "artifacts/${CRATE}-${GITHUB_REF_NAME}.cdx.json"
+          done < <(find crates -maxdepth 2 -name '*.cdx.json' -type f | sort)
+          test "$(find artifacts -maxdepth 1 -name '*.cdx.json' -type f | wc -l)" -eq 6
+
+      - name: Create checksum manifest
+        working-directory: artifacts
+        run: sha256sum ./* > SHA256SUMS
+
+      - name: Attest release assets
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
         with:
-          generate_release_notes: true
-          files: artifacts/*
+          subject-path: artifacts/*
+
+      - name: Create or update GitHub release
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" artifacts/* --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" artifacts/* --verify-tag --generate-notes
+          fi
 
   publish:
-    name: Publish to crates.io
+    name: Publish crates.io packages
     needs: release
     runs-on: ubuntu-latest
+    environment: crates-io
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Publish forgetest-core
         run: cargo publish --package forgetest-core --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-      - name: Wait for index
-        run: sleep 30
+      - name: Wait for core index propagation
+        run: sleep 60
+
+      - name: Publish forgetest-agents
+        run: cargo publish --package forgetest-agents --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Publish forgetest-providers
         run: cargo publish --package forgetest-providers --locked
@@ -148,13 +282,13 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-      - name: Wait for index
-        run: sleep 30
-
       - name: Publish forgetest-report
         run: cargo publish --package forgetest-report --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for dependency index propagation
+        run: sleep 60
 
       - name: Publish forgetest-cli
         run: cargo publish --package forgetest-cli --locked

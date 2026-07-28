@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>forgetest report — forgetest Offline Demo</title>
+<style>
+
+:root { --bg: #fff; --fg: #1a1a1a; --border: #e5e7eb; --pass: #dcfce7; --fail: #fde2e2; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111827; --fg: #f9fafb; --border: #374151; --pass: #064e3b; --fail: #7f1d1d; }
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 2rem; background: var(--bg); color: var(--fg); }
+h1, h2 { margin-top: 2rem; }
+.meta { color: #6b7280; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid var(--border); padding: 0.5rem 1rem; text-align: left; }
+th { background: var(--border); cursor: pointer; }
+.pass { background: var(--pass); }
+.fail { background: var(--fail); }
+pre { overflow-x: auto; padding: 1rem; background: var(--border); border-radius: 8px; }
+code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85rem; }
+details { margin: 1rem 0; }
+summary { cursor: pointer; font-weight: bold; }
+svg { margin: 1rem 0; }
+</style>
+</head>
+<body>
+<header>
+<h1>forgetest report</h1>
+<p class="meta">Eval set: <strong>forgetest Offline Demo</strong> | 2 cases | 1 models | 2026-07-27 15:50:19 UTC</p>
+</header>
+<section class="dashboard">
+<h2>Summary</h2>
+<table class="summary">
+<thead><tr><th>Model</th><th>Pass@1</th><th>Compile %</th><th>Test Pass %</th><th>Cost</th><th>Avg Trial</th></tr></thead>
+<tbody>
+<tr><td>mock-model</td><td>100.0%</td><td>100.0%</td><td>100.0%</td><td>$0.0000</td><td>9789ms</td></tr>
+</tbody></table>
+<svg width="660" height="50" xmlns="http://www.w3.org/2000/svg">
+  <text x="190" y="25" font-size="14" fill="currentColor" text-anchor="end" dominant-baseline="middle">mock-model</text>
+  <rect x="200" y="10" width="400" height="30" fill="#22c55e" rx="4"/>
+  <text x="608" y="25" font-size="12" fill="currentColor" dominant-baseline="middle">100.0%</text>
+</svg>
+</section>
+<section class="results">
+<h2>Results</h2>
+<table class="results-table" id="results">
+<thead><tr><th onclick="sortTable(0)">Case</th><th onclick="sortTable(1)">Model</th><th onclick="sortTable(2)">Compile</th><th onclick="sortTable(3)">Tests</th><th onclick="sortTable(4)">Attempt</th></tr></thead>
+<tbody>
+<tr class="pass"><td>add_function</td><td>mock-model</td><td class="pass">OK</td><td>1/1</td><td>1</td></tr>
+<tr class="pass"><td>reverse_string</td><td>mock-model</td><td class="pass">OK</td><td>1/1</td><td>1</td></tr>
+</tbody></table>
+</section>
+<section class="raw-data">
+<details>
+<summary>Raw JSON Data</summary>
+<pre><code>{
+  "id": "a2f5155b-cd30-4434-ab4e-d8ab90dfabd5",
+  "created_at": "2026-07-27T15:50:19.347593Z",
+  "eval_set": {
+    "id": "forgetest-demo",
+    "name": "forgetest Offline Demo",
+    "case_count": 2
+  },
+  "models_evaluated": [
+    "mock-model"
+  ],
+  "results": [
+    {
+      "case_id": "add_function",
+      "model": "mock-model",
+      "provider": "mock",
+      "generated_code": "pub fn add(a: i32, b: i32) -&gt; i32 { a + b }",
+      "compilation": {
+        "success": true,
+        "errors": [],
+        "warnings": [],
+        "duration_ms": 690
+      },
+      "test_execution": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "duration_ms": 6979,
+        "failures": []
+      },
+      "clippy": {
+        "warnings": [],
+        "warning_count": 0
+      },
+      "timing": {
+        "llm_request_ms": 0,
+        "compilation_ms": 690,
+        "test_execution_ms": 6979,
+        "total_ms": 9800
+      },
+      "token_usage": {
+        "prompt_tokens": 14,
+        "completion_tokens": 10,
+        "total_tokens": 24,
+        "estimated_cost_usd": 0.0
+      },
+      "score": {
+        "compilation": 1.0,
+        "tests": 1.0,
+        "clippy": 1.0,
+        "structure": 1.0,
+        "overall": 1.0
+      },
+      "status": "completed",
+      "error": null,
+      "attempt": 1,
+      "run_id": "a2f5155b-cd30-4434-ab4e-d8ab90dfabd5"
+    },
+    {
+      "case_id": "reverse_string",
+      "model": "mock-model",
+      "provider": "mock",
+      "generated_code": "pub fn reverse_string(s: &str) -&gt; String { s.chars().rev().collect() }",
+      "compilation": {
+        "success": true,
+        "errors": [],
+        "warnings": [],
+        "duration_ms": 658
+      },
+      "test_execution": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "duration_ms": 6997,
+        "failures": []
+      },
+      "clippy": {
+        "warnings": [],
+        "warning_count": 0
+      },
+      "timing": {
+        "llm_request_ms": 0,
+        "compilation_ms": 658,
+        "test_execution_ms": 6997,
+        "total_ms": 9778
+      },
+      "token_usage": {
+        "prompt_tokens": 19,
+        "completion_tokens": 17,
+        "total_tokens": 36,
+        "estimated_cost_usd": 0.0
+      },
+      "score": {
+        "compilation": 1.0,
+        "tests": 1.0,
+        "clippy": 1.0,
+        "structure": 1.0,
+        "overall": 1.0
+      },
+      "status": "completed",
+      "error": null,
+      "attempt": 1,
+      "run_id": "a2f5155b-cd30-4434-ab4e-d8ab90dfabd5"
+    }
+  ],
+  "aggregate": {
+    "per_model": {
+      "mock-model": {
+        "model": "mock-model",
+        "pass_at_k": {
+          "1": 1.0
+        },
+        "avg_compilation_rate": 1.0,
+        "avg_test_pass_rate": 1.0,
+        "avg_clippy_score": 1.0,
+        "total_tokens": 60,
+        "total_cost_usd": 0.0,
+        "avg_trial_duration_ms": 9789
+      }
+    },
+    "per_case": {
+      "add_function": {
+        "case_id": "add_function",
+        "per_model_pass_rate": {
+          "mock-model": 1.0
+        }
+      },
+      "reverse_string": {
+        "case_id": "reverse_string",
+        "per_model_pass_rate": {
+          "mock-model": 1.0
+        }
+      }
+    }
+  },
+  "manifest": {
+    "schema_version": 2,
+    "hash_algorithm": "sha256",
+    "forgetest_version": "0.1.0",
+    "git_sha": "4dde060a02d9ee0a849941a80f991fea4e42f3b9",
+    "git_dirty": true,
+    "rustc_version": "rustc 1.92.0 (ded5c06cf 2025-12-08)",
+    "cargo_version": "cargo 1.92.0 (344c4567c 2025-10-21)",
+    "runner": {
+      "runner_type": "local",
+      "docker_image": null,
+      "docker_image_digest": null
+    },
+    "eval_set_hash": "ad9d02ecd73959737a0338ac85e8ff6ff3ddfdf83fa0c8e5e4fbf53878fa37c2",
+    "case_hashes": {
+      "add_function": "417fb207aa043c4a3edc3ad7eaad07f427222266809b59fb628e5a4c0b9ae9e3",
+      "reverse_string": "1362c3261be2043598c4c41dc8a40f5a97b3c0191b0f5c1a1a1ee2fa6c55c6f2"
+    },
+    "models": [
+      {
+        "provider": "mock",
+        "model": "mock-model"
+      }
+    ],
+    "pass_k": [
+      1
+    ],
+    "temperature": 0.0,
+    "created_at": "2026-07-27T15:50:09.543387Z",
+    "config_hash": "1a91c64a6c4935b6e948a2450ced976e94d8e436ce8b53645eb0ad35da32ce70"
+  },
+  "duration_ms": 9803
+}</code></pre>
+</details>
+</section>
+<script>
+
+function sortTable(col) {
+  const table = document.getElementById('results');
+  const tbody = table.querySelector('tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const asc = table.dataset.sortCol == col && table.dataset.sortDir == 'asc' ? false : true;
+  rows.sort((a, b) => {
+    const va = a.cells[col].textContent;
+    const vb = b.cells[col].textContent;
+    return asc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+  table.dataset.sortCol = col;
+  table.dataset.sortDir = asc ? 'asc' : 'desc';
+  rows.forEach(r => tbody.appendChild(r));
+}
+</script>
+</body>
+</html>
