@@ -1,6 +1,6 @@
 //! Repository-suite command implementation.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -16,7 +16,7 @@ use forgetest_core::repository_report::{
 };
 use forgetest_core::suite::load_suite;
 use forgetest_providers::config::{load_config_from, ForgetestConfig, RunnerType};
-use forgetest_report::redaction::{redact_repository_report, RedactionOptions};
+use forgetest_report::redaction::redact_repository_report;
 use forgetest_runner::{DockerRepositoryGrader, DockerVerifierConfig, LocalRepositoryGrader};
 use sha2::{Digest, Sha256};
 
@@ -236,7 +236,16 @@ pub async fn execute(options: RepositoryRunOptions) -> Result<()> {
                 .map(|agent| agent.name.as_str())
                 .collect::<Vec<_>>(),
         )?;
-        preflight_locked_environment(&requested_agents, lock).await?;
+    }
+    if runner_type == RunnerType::Docker {
+        doctor_verifier_container(&verifier_image)
+            .await
+            .with_context(|| {
+                format!("Docker verifier preflight failed for image {verifier_image}")
+            })?;
+    }
+    if let Some(lock) = &lock {
+        preflight_locked_agents(&requested_agents, lock).await?;
     }
 
     let agents = build_agents(&requested_agents, lock.as_ref(), profile.as_str())?;
@@ -271,8 +280,10 @@ pub async fn execute(options: RepositoryRunOptions) -> Result<()> {
     );
     let report = engine.run(&suite, agents).await?;
     crate::commands::demo::write_repository_outputs(&report, &raw_dir, &format)?;
-    let public =
-        redact_repository_report(&report, &public_redaction_options(&suite.root, &output))?;
+    let public = redact_repository_report(
+        &report,
+        &crate::commands::demo::public_redaction_options(&suite.root, &output),
+    )?;
     crate::commands::demo::write_repository_outputs(&public, &public_dir, &format)?;
 
     let passed = report
@@ -289,18 +300,7 @@ pub async fn execute(options: RepositoryRunOptions) -> Result<()> {
     Ok(())
 }
 
-async fn preflight_locked_environment(
-    requested: &[RequestedAgent],
-    lock: &BenchmarkLock,
-) -> Result<()> {
-    doctor_verifier_container(&lock.verifier_image)
-        .await
-        .with_context(|| {
-            format!(
-                "benchmark preflight failed for verifier image {}",
-                lock.verifier_image
-            )
-        })?;
+async fn preflight_locked_agents(requested: &[RequestedAgent], lock: &BenchmarkLock) -> Result<()> {
     for requested in requested {
         let locked = lock.agent(&requested.name)?;
         let profile = profile_for(&requested.name, &locked.model, locked.effort.as_deref())?;
@@ -418,29 +418,6 @@ fn build_agents(
 
 fn profile_for(name: &str, model: &str, effort: Option<&str>) -> Result<CommandProfile> {
     builtin_profile(name, model, effort)
-}
-
-fn public_redaction_options(suite_root: &Path, output: &Path) -> RedactionOptions {
-    let mut path_replacements = vec![
-        (suite_root.to_path_buf(), "$SUITE".into()),
-        (output.to_path_buf(), "$OUTPUT".into()),
-    ];
-    if let Some(home) = std::env::var_os("HOME") {
-        path_replacements.push((PathBuf::from(home), "$HOME".into()));
-    }
-    let secret_values = [
-        "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "FORGETEST_OPENAI_KEY",
-        "FORGETEST_ANTHROPIC_KEY",
-    ]
-    .into_iter()
-    .filter_map(|name| std::env::var(name).ok())
-    .collect();
-    RedactionOptions {
-        path_replacements,
-        secret_values,
-    }
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {

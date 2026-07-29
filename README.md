@@ -3,6 +3,8 @@
 Execution-backed regression and evidence harness for Rust coding agents.
 
 [![CI](https://github.com/MysterionRise/forgetest/actions/workflows/ci.yml/badge.svg)](https://github.com/MysterionRise/forgetest/actions/workflows/ci.yml)
+[![Evidence](https://img.shields.io/badge/evidence-source-2ea44f)](docs/src/evidence.md)
+[![Release](https://img.shields.io/github/v/release/MysterionRise/forgetest?display_name=tag)](https://github.com/MysterionRise/forgetest/releases)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
 `forgetest` gives a coding agent a fresh repository task, records a typed event
@@ -36,11 +38,35 @@ Implemented:
 
 Not claimed:
 
+- The pre-registered six-trial real-agent pilot has not been executed.
 - The planned 72-trial Codex versus Claude study has not been run or published.
 - Deterministic scripted demos are not model benchmarks.
 - v1 does not claim safe execution of hostile repositories.
 - Content identities and checksums are provenance evidence, not proof that two
   stochastic model calls will return the same output.
+
+## Verified Proof Path
+
+[The evidence ledger](docs/src/evidence.md) links the publication-safe reports
+and separates executable proof from roadmap claims. The Pages workflow
+publishes that ledger after a successful default-branch deployment. CI
+calibrates all 12 tasks, executes both deterministic demos, and verifies each
+artifact manifest.
+
+![Redacted repository trial report](docs/src/assets/repository-report.png)
+
+The screenshot is generated from the deterministic local repository demo. It
+shows report structure and provenance, not paid-model performance.
+
+## Install
+
+Release archives contain a single `forgetest` binary plus licenses, the
+changelog, and README. The crate installation path is:
+
+```bash
+cargo install forgetest-cli --version 0.1.0 --locked
+forgetest --version
+```
 
 ## Try It Without Keys
 
@@ -298,6 +324,12 @@ compatibility.
 
 ## Study Status
 
+The release pilot is pre-registered as
+`3 tasks x 2 agents x 1 trial = 6 trials`, using exact model IDs
+`gpt-5.6-sol` and `claude-sonnet-5`. Its protocol and empty results template
+are in [studies/rust-agent-pilot](studies/rust-agent-pilot/README.md). No result
+is asserted until all six outcomes and the reviewed redacted bundle exist.
+
 The v1 study protocol is `12 tasks x 2 agents x 3 trials = 72 trials`. The
 tooling computes success rates, Wilson 95% intervals, pass@1, pass^3,
 task-paired bootstrap intervals, costs, and infrastructure failures. Exact
@@ -310,6 +342,7 @@ redacted evidence are published.
 - [Architecture](ARCHITECTURE.md)
 - [Security model](SECURITY.md)
 - [CTO case study](docs/src/case-study.md)
+- [Changelog](CHANGELOG.md)
 - [Repository suite format](docs/src/repository-suites.md)
 - [Benchmark operations](docs/src/advanced.md)
 

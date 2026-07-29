@@ -1,0 +1,16 @@
+schema_version = 2
+id = "rust-agent-v1-pilot"
+name = "forgetest Rust Agent v1 Pilot"
+description = "Three-task proof run spanning a boundary bug, async coordination, and path security."
+
+[[tasks]]
+id = "range-boundary"
+path = "tasks/range-boundary"
+
+[[tasks]]
+id = "once-notify"
+path = "tasks/once-notify"
+
+[[tasks]]
+id = "safe-path"
+path = "tasks/safe-path"

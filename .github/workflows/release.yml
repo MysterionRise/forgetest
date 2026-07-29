@@ -42,7 +42,7 @@ jobs:
           cargo clippy --workspace --all-targets --locked -- -D warnings
           cargo test --workspace --all-targets --locked
           RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
-          cargo package --workspace --allow-dirty --no-verify
+          cargo package --workspace --allow-dirty --no-verify --locked
 
   build:
     name: Build (${{ matrix.target }})
@@ -93,7 +93,11 @@ jobs:
 
       - name: Install cross
         if: matrix.use_cross
-        run: cargo install cross --version 0.2.5 --locked
+        shell: bash
+        run: |
+          if ! cross --version 2>/dev/null | grep -Fqx 'cross 0.2.5'; then
+            cargo install cross --version 0.2.5 --locked --force
+          fi
 
       - name: Build release binary with cross
         if: matrix.use_cross
@@ -103,6 +107,16 @@ jobs:
         if: "!matrix.use_cross"
         run: cargo build --release --locked --target ${{ matrix.target }} --package forgetest-cli
 
+      - name: Smoke-test native release binary
+        if: "!matrix.use_cross"
+        shell: bash
+        run: |
+          BINARY="target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}"
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            BINARY="${BINARY}.exe"
+          fi
+          "$BINARY" --version
+
       - name: Package Unix binary
         if: matrix.archive == 'tar.gz'
         shell: bash
@@ -110,7 +124,7 @@ jobs:
           STAGING="${{ env.BINARY_NAME }}-${{ github.ref_name }}-${{ matrix.target }}"
           mkdir -p "$STAGING"
           cp "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}" "$STAGING/"
-          cp README.md LICENSE-MIT LICENSE-APACHE "$STAGING/"
+          cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "$STAGING/"
           tar czf "$STAGING.tar.gz" "$STAGING"
           echo "ASSET=$STAGING.tar.gz" >> "$GITHUB_ENV"
 
@@ -121,7 +135,7 @@ jobs:
           STAGING="${{ env.BINARY_NAME }}-${{ github.ref_name }}-${{ matrix.target }}"
           mkdir -p "$STAGING"
           cp "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}.exe" "$STAGING/"
-          cp README.md LICENSE-MIT LICENSE-APACHE "$STAGING/"
+          cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "$STAGING/"
           7z a "$STAGING.zip" "$STAGING"
           echo "ASSET=$STAGING.zip" >> "$GITHUB_ENV"
 
@@ -216,7 +230,11 @@ jobs:
           merge-multiple: true
 
       - name: Install CycloneDX generator
-        run: cargo install cargo-cyclonedx --version 0.5.9 --locked
+        shell: bash
+        run: |
+          if ! cargo cyclonedx --version 2>/dev/null | grep -Fq '0.5.9'; then
+            cargo install cargo-cyclonedx --version 0.5.9 --locked --force
+          fi
 
       - name: Generate workspace SBOMs
         shell: bash
@@ -259,38 +277,8 @@ jobs:
       - name: Check out source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Publish forgetest-core
-        run: cargo publish --package forgetest-core --locked
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for core index propagation
-        run: sleep 60
-
-      - name: Publish forgetest-agents
-        run: cargo publish --package forgetest-agents --locked
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Publish forgetest-providers
-        run: cargo publish --package forgetest-providers --locked
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Publish forgetest-runner
-        run: cargo publish --package forgetest-runner --locked
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Publish forgetest-report
-        run: cargo publish --package forgetest-report --locked
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for dependency index propagation
-        run: sleep 60
-
-      - name: Publish forgetest-cli
-        run: cargo publish --package forgetest-cli --locked
+      - name: Publish workspace crates
+        shell: bash
+        run: bash scripts/publish-crates.sh "${GITHUB_REF_NAME#v}"
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

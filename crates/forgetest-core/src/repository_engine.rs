@@ -192,9 +192,13 @@ impl RepositoryEngine {
             .as_bytes(),
         );
 
-        let setup = (|| -> Result<(PathBuf, TreeSnapshot, JsonlEventSink)> {
+        let setup = (|| -> Result<(tempfile::TempDir, PathBuf, TreeSnapshot, JsonlEventSink)> {
             ensure_private_directory(&trial_dir)?;
-            let agent_workspace = trial_dir.join("agent-workspace");
+            let workspace_root = tempfile::Builder::new()
+                .prefix("forgetest-trial-")
+                .tempdir()
+                .context("failed to create isolated trial workspace")?;
+            let agent_workspace = workspace_root.path().join("agent-workspace");
             copy_tree(&task.workspace, &agent_workspace, false)?;
             let baseline = snapshot_tree(
                 &task.workspace,
@@ -202,10 +206,10 @@ impl RepositoryEngine {
                 self.config.max_workspace_bytes,
             )?;
             let sink = JsonlEventSink::new(&trace_path)?;
-            Ok((agent_workspace, baseline, sink))
+            Ok((workspace_root, agent_workspace, baseline, sink))
         })();
 
-        let (agent_workspace, baseline, sink) = match setup {
+        let (workspace_root, agent_workspace, baseline, sink) = match setup {
             Ok(setup) => setup,
             Err(error) => {
                 return failure_trial(
@@ -483,7 +487,7 @@ impl RepositoryEngine {
             };
         }
 
-        let verifier_workspace = trial_dir.join("verifier-workspace");
+        let verifier_workspace = workspace_root.path().join("verifier-workspace");
         let verification_setup = (|| -> Result<()> {
             copy_tree(&task.workspace, &verifier_workspace, false)?;
             apply_snapshot_changes(&agent_workspace, &verifier_workspace, &changes)?;

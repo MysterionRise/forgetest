@@ -5,9 +5,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
-use forgetest_agents::{DirectWorkspaceEnvironment, ScriptedAgent, ScriptedEdit};
+use forgetest_agents::{
+    doctor_verifier_container, DirectWorkspaceEnvironment, ScriptedAgent, ScriptedEdit,
+};
 use forgetest_core::agent::{AgentIdentity, AgentLimits};
 use forgetest_core::engine::{EvalEngine, EvalEngineConfig, ModelSpec, ProgressReporter};
 use forgetest_core::model::{EvalCase, EvalSet, Expectations, Language};
@@ -164,6 +166,16 @@ async fn execute_repository(output: PathBuf, format: String, runner: String) -> 
     let fixture = tempfile::tempdir()?;
     write_repository_demo_suite(fixture.path())?;
     let suite = load_suite(&fixture.path().join("suite.toml"))?;
+    if runner_type == forgetest_providers::config::RunnerType::Docker {
+        doctor_verifier_container(&config.runner.docker_image)
+            .await
+            .with_context(|| {
+                format!(
+                    "Docker verifier preflight failed for image {}",
+                    config.runner.docker_image
+                )
+            })?;
+    }
 
     let agent = Arc::new(ScriptedAgent::new(
         AgentIdentity {
@@ -257,12 +269,44 @@ async fn execute_repository(output: PathBuf, format: String, runner: String) -> 
     let report = engine.run(&suite, vec![agent]).await?;
     write_repository_outputs(&report, &raw_dir, &format)?;
 
-    let mut path_replacements = vec![
-        (suite.root.clone(), "$SUITE".into()),
-        (output.clone(), "$OUTPUT".into()),
-    ];
-    if let Some(home) = std::env::var_os("HOME") {
-        path_replacements.push((PathBuf::from(home), "$HOME".into()));
+    let public =
+        redact_repository_report(&report, &public_redaction_options(&suite.root, &output))?;
+    write_repository_outputs(&public, &public_dir, &format)?;
+    eprintln!(
+        "Repository demo reports are scripted offline evidence, not real-agent benchmark results."
+    );
+    let passed = report
+        .trials
+        .iter()
+        .filter(|trial| trial.status == forgetest_core::repository_report::TrialStatus::Passed)
+        .count();
+    anyhow::ensure!(
+        passed == report.trials.len(),
+        "repository demo verification failed: {passed}/{} trials passed; inspect evidence in {}",
+        report.trials.len(),
+        raw_dir.display()
+    );
+    Ok(())
+}
+
+pub(crate) fn public_redaction_options(suite_root: &Path, output: &Path) -> RedactionOptions {
+    let mut path_replacements = Vec::new();
+    add_path_replacement(&mut path_replacements, suite_root, "$SUITE");
+    add_path_replacement(&mut path_replacements, output, "$OUTPUT");
+    if let Ok(current_dir) = std::env::current_dir() {
+        add_path_replacement(&mut path_replacements, &current_dir, "$CWD");
+    }
+    let temp_dir = std::env::temp_dir();
+    add_path_replacement(&mut path_replacements, &temp_dir, "$TMP");
+    for (name, replacement) in [
+        ("HOME", "$HOME"),
+        ("USERPROFILE", "$HOME"),
+        ("CARGO_HOME", "$CARGO_HOME"),
+        ("RUSTUP_HOME", "$RUSTUP_HOME"),
+    ] {
+        if let Some(path) = std::env::var_os(name) {
+            add_path_replacement(&mut path_replacements, &PathBuf::from(path), replacement);
+        }
     }
     let secret_values = [
         "OPENAI_API_KEY",
@@ -273,18 +317,23 @@ async fn execute_repository(output: PathBuf, format: String, runner: String) -> 
     .into_iter()
     .filter_map(|name| std::env::var(name).ok())
     .collect();
-    let public = redact_repository_report(
-        &report,
-        &RedactionOptions {
-            path_replacements,
-            secret_values,
-        },
-    )?;
-    write_repository_outputs(&public, &public_dir, &format)?;
-    eprintln!(
-        "Repository demo reports are scripted offline evidence, not real-agent benchmark results."
-    );
-    Ok(())
+    RedactionOptions {
+        path_replacements,
+        secret_values,
+    }
+}
+
+fn add_path_replacement(replacements: &mut Vec<(PathBuf, String)>, path: &Path, replacement: &str) {
+    if path.as_os_str().is_empty() {
+        return;
+    }
+    let normalized = path.components().collect::<PathBuf>();
+    replacements.push((normalized.clone(), replacement.into()));
+    if let Ok(canonical) = normalized.canonicalize() {
+        if canonical != normalized {
+            replacements.push((canonical, replacement.into()));
+        }
+    }
 }
 
 pub(crate) fn write_repository_outputs(
