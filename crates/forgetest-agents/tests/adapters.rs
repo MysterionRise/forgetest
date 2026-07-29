@@ -593,16 +593,16 @@ async fn process_agent_streams_events_before_process_exit() {
     let script = root.path().join("streaming.sh");
     std::fs::write(
         &script,
-        "#!/bin/sh\nprintf 'working\\n'\nsleep 2\nprintf 'done\\n'\n",
+        "#!/bin/sh\nprintf 'working\\n'\nwhile [ ! -f \"$1\" ]; do sleep 0.01; done\nprintf 'done\\n'\n",
     )
     .unwrap();
     let mut permissions = std::fs::metadata(&script).unwrap().permissions();
     permissions.set_mode(0o700);
     std::fs::set_permissions(&script, permissions).unwrap();
-    let agent = Arc::new(ProcessAgent::new(
-        CommandProfile::generic(script.to_string_lossy(), EventParser::Text),
-        identity("generic"),
-    ));
+    let marker = root.path().join("continue");
+    let mut profile = CommandProfile::generic(script.to_string_lossy(), EventParser::Text);
+    profile.arguments.push("{workspace}/continue".to_string());
+    let agent = Arc::new(ProcessAgent::new(profile, identity("generic")));
     let sink = Arc::new(SignalSink {
         seen: AtomicBool::new(false),
         notify: tokio::sync::Notify::new(),
@@ -620,15 +620,21 @@ async fn process_agent_streams_events_before_process_exit() {
         tokio::spawn(async move { agent.execute(&request, sink.as_ref()).await })
     };
 
-    tokio::time::timeout(std::time::Duration::from_secs(1), sink.notify.notified())
+    tokio::time::timeout(std::time::Duration::from_secs(10), sink.notify.notified())
         .await
         .expect("first event was buffered until process exit");
     assert!(
         sink.seen.load(Ordering::SeqCst),
         "first event was buffered until process exit"
     );
+    std::fs::write(marker, "continue").unwrap();
     assert_eq!(
-        running.await.unwrap().unwrap().termination,
+        tokio::time::timeout(std::time::Duration::from_secs(5), running)
+            .await
+            .expect("agent did not exit after streaming handshake")
+            .unwrap()
+            .unwrap()
+            .termination,
         AgentTerminationReason::Completed
     );
 }

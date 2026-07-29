@@ -41,15 +41,18 @@ jobs:
       - name: Deny rustdoc warnings
         run: cargo doc --workspace --no-deps --locked
 
-      - name: Build mdBook
+      - name: Build and verify Pages artifact
         run: |
           if ! mdbook --version 2>/dev/null | grep -Fqx 'mdbook v0.4.52'; then
             cargo install mdbook --version 0.4.52 --locked --force
           fi
-          mdbook build docs --dest-dir ../target/book
+          bash scripts/test-build-pages.sh
+
+      - name: Test resumable crate publisher
+        run: bash scripts/test-publish-crates.sh
 
       - name: Dry-run workspace packages
-        run: cargo package --workspace --allow-dirty --no-verify
+        run: cargo package --workspace --allow-dirty --no-verify --locked
 
       - name: Audit RustSec advisories
         run: |

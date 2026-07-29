@@ -108,4 +108,18 @@ if grep -R -q '"avg_latency_ms"\|Avg Latency' "$REPORT_ROOT"; then
   exit 1
 fi
 
+if grep -R -E -q \
+  '(/Users/|/home/[^$[:space:]"]+|/private/var/|/var/folders/|/tmp/forgetest-trial-|[A-Za-z]:\\Users\\)' \
+  "$REPORT_ROOT"; then
+  echo "publication-safe path scan failed for sample reports" >&2
+  exit 1
+fi
+
+if grep -R -E -q \
+  '((sk|sk-ant)-[A-Za-z0-9_-]{12,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})' \
+  "$REPORT_ROOT"; then
+  echo "publication-safe credential scan failed for sample reports" >&2
+  exit 1
+fi
+
 echo "sample report contract verified"

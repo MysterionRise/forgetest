@@ -75,3 +75,28 @@ release assets. It then publishes crates in dependency order, including
 
 These are workflow guarantees, not claims about an unreleased tag. Verify a
 published asset with `gh attestation verify` against this repository.
+
+The release matrix also executes each native binary before archiving it.
+Cached `cross` and `cargo-cyclonedx` installations are version-checked and
+reinstalled when stale, so a cache hit cannot silently select another tool
+version.
+
+Crates are published in dependency order through `scripts/publish-crates.sh`.
+The publisher independently checks the exact crates.io version and archive
+checksum, skips only an identical already-visible package, and waits for each
+new package to become visible. A release job can therefore resume after a
+partial registry publication without accepting mismatched content.
+
+## Evidence Site
+
+`.github/workflows/pages.yml` builds the mdBook plus the committed
+publication-safe sample reports with `scripts/build-pages.sh`, uploads one
+Pages artifact, and deploys it through the protected `github-pages`
+environment. CI runs
+`scripts/test-build-pages.sh` to assert the expected pages and report files
+before deployment. The Pages build independently verifies artifact manifests
+and scans public reports for private host paths and credential patterns.
+
+A repository administrator must select **GitHub Actions** as the Pages source
+once before the first deployment. The workflow intentionally uses only the
+scoped `GITHUB_TOKEN`, which cannot enable Pages on its own.

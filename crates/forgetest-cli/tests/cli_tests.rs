@@ -632,7 +632,7 @@ fn repository_demo_writes_private_and_redacted_evidence() {
     let raw: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(raw_path).unwrap()).unwrap();
     let public: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(public_path).unwrap()).unwrap();
+        serde_json::from_str(&std::fs::read_to_string(&public_path).unwrap()).unwrap();
     assert_eq!(raw["schema_version"], 2);
     assert_eq!(
         raw["trials"][0]["status"],
@@ -642,6 +642,27 @@ fn repository_demo_writes_private_and_redacted_evidence() {
     );
     assert_eq!(raw["redaction"]["redacted"], false);
     assert_eq!(public["redaction"]["redacted"], true);
+    assert_eq!(public["redaction"]["rules_version"], "1");
+    let public_json = std::fs::read_to_string(&public_path).unwrap();
+    let public_html = std::fs::read_to_string(dir.path().join("public/report.html")).unwrap();
+    let temp_dir = std::env::temp_dir();
+    let canonical_temp_dir = temp_dir.canonicalize().unwrap();
+    let private_paths =
+        [temp_dir, canonical_temp_dir].map(|path| path.to_string_lossy().to_string());
+    for public_artifact in [&public_json, &public_html] {
+        for private_path in &private_paths {
+            let json_escaped = serde_json::to_string(private_path).unwrap();
+            let json_escaped = json_escaped.trim_matches('"');
+            assert!(
+                !public_artifact.contains(private_path) && !public_artifact.contains(json_escaped),
+                "public evidence leaked a system temporary path"
+            );
+        }
+        assert!(
+            !public_artifact.contains("$TMPforgetest"),
+            "temporary path replacement lost its separator"
+        );
+    }
     let raw_manifest: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(dir.path().join("raw/artifact-manifest.json")).unwrap(),
     )
@@ -655,6 +676,91 @@ fn repository_demo_writes_private_and_redacted_evidence() {
                 .as_str()
                 .is_some_and(|path| path.starts_with("trials/") && path.ends_with("/trace.jsonl"))
         }));
+}
+
+#[test]
+fn repository_demo_passes_with_output_inside_the_cargo_workspace() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap();
+    let target = workspace.join("target");
+    std::fs::create_dir_all(&target).unwrap();
+    let dir = tempfile::Builder::new()
+        .prefix("repository-demo-in-workspace-")
+        .tempdir_in(target)
+        .unwrap();
+
+    forgetest()
+        .arg("demo")
+        .arg("--mode")
+        .arg("repository")
+        .arg("--runner")
+        .arg("local")
+        .arg("--output")
+        .arg(dir.path())
+        .assert()
+        .success();
+
+    let report: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.path().join("raw/report.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        report["trials"][0]["status"],
+        "passed",
+        "repository demo trial failed:\n{}",
+        serde_json::to_string_pretty(&report["trials"][0]).unwrap()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn repository_demo_fails_the_command_when_verification_does_not_pass() {
+    let dir = TempDir::new().unwrap();
+
+    forgetest()
+        .env("PATH", "/nonexistent")
+        .arg("demo")
+        .arg("--mode")
+        .arg("repository")
+        .arg("--runner")
+        .arg("local")
+        .arg("--output")
+        .arg(dir.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "repository demo verification failed",
+        ));
+
+    assert!(dir.path().join("raw/report.json").is_file());
+    assert!(dir.path().join("public/report.json").is_file());
+}
+
+#[cfg(unix)]
+#[test]
+fn repository_demo_failure_points_to_emitted_html_evidence() {
+    let dir = TempDir::new().unwrap();
+
+    forgetest()
+        .env("PATH", "/nonexistent")
+        .arg("demo")
+        .arg("--mode")
+        .arg("repository")
+        .arg("--runner")
+        .arg("local")
+        .arg("--format")
+        .arg("html")
+        .arg("--output")
+        .arg(dir.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("inspect evidence in"))
+        .stderr(predicate::str::contains("report.json").not());
+
+    assert!(dir.path().join("raw/report.html").is_file());
+    assert!(dir.path().join("public/report.html").is_file());
+    assert!(!dir.path().join("raw/report.json").exists());
 }
 
 #[test]
@@ -775,6 +881,65 @@ printf '{"type":"item.completed","message":"fixed src/lib.rs"}\n'
     assert_eq!(report["trials"][0]["status"], "passed");
     assert_eq!(report["trials"][0]["agent"]["model"], "test-model");
     assert!(output.join("public/report.html").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn repository_run_preflights_docker_before_invoking_an_agent() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = TempDir::new().unwrap();
+    write_repository_suite(root.path());
+    let bin = root.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let agent_marker = root.path().join("agent-invoked");
+    let codex = bin.join("codex");
+    std::fs::write(
+        &codex,
+        format!(
+            "#!/bin/sh\nprintf invoked > '{}'\necho 'codex-cli test'\n",
+            agent_marker.display()
+        ),
+    )
+    .unwrap();
+    let docker = bin.join("docker");
+    std::fs::write(
+        &docker,
+        "#!/bin/sh\necho 'verifier image unavailable' >&2\nexit 42\n",
+    )
+    .unwrap();
+    for executable in [&codex, &docker] {
+        let mut permissions = std::fs::metadata(executable).unwrap().permissions();
+        permissions.set_mode(0o700);
+        std::fs::set_permissions(executable, permissions).unwrap();
+    }
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    forgetest()
+        .env("PATH", path)
+        .arg("run")
+        .arg("--suite")
+        .arg(root.path().join("suite.toml"))
+        .arg("--agents")
+        .arg("codex/test-model")
+        .arg("--profile")
+        .arg("development")
+        .arg("--runner")
+        .arg("docker")
+        .arg("--output")
+        .arg(root.path().join("results"))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Docker verifier preflight failed"));
+
+    assert!(
+        !agent_marker.exists(),
+        "agent was invoked before Docker verifier preflight completed"
+    );
 }
 
 fn write_repository_suite(root: &Path) {
