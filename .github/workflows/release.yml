@@ -36,6 +36,9 @@ jobs:
           EXPECTED="v$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
           test "${GITHUB_REF_NAME}" = "${EXPECTED}"
 
+      - name: Check release portability
+        run: bash scripts/check-release-portability.sh
+
       - name: Run release quality gate
         run: |
           cargo fmt --all --check

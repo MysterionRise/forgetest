@@ -24,6 +24,7 @@ First public proof-of-concept release.
   paths inside another Cargo workspace cannot invalidate verification.
 - Docker verifier preflight before external-agent execution, publication-safe
   path scanning, and resumable crates.io publishing.
+- Rustls-backed provider HTTP clients and an ARM64 Linux portability gate.
 
 ### Boundaries
 
