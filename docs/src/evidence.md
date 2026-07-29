@@ -16,6 +16,7 @@ links resolve after the Pages workflow has completed on the default branch.
 - [Snippet demo, Docker runner](https://mysterionrise.github.io/forgetest/reports/docker/report-2026-07-27T155934.html)
 - [CI workflow](https://github.com/MysterionRise/forgetest/actions/workflows/ci.yml)
 - [Release workflow](https://github.com/MysterionRise/forgetest/actions/workflows/release.yml)
+- [`v0.1.0` GitHub release](https://github.com/MysterionRise/forgetest/releases/tag/v0.1.0)
 
 Each repository report is accompanied by redacted JSON, deterministic SARIF,
 and an artifact manifest containing SHA-256 digests and byte sizes.
@@ -27,7 +28,7 @@ and an artifact manifest containing SHA-256 digests and byte sizes.
 | The no-key repository loop runs end to end | Local and Docker CI jobs plus browser reports | Uses a deterministic scripted agent |
 | All 12 corpus tasks are calibrated | CI runs null-patch and reference-patch calibration | Calibration is not agent performance |
 | Docker verification is hardened as documented | Gated integration tests and Docker demo | Not a hostile-repository sandbox |
-| Release assets are packaged, checksummed, attested, and SBOM-backed | Green tagged release workflow | Applies only after a successful tag run |
+| `v0.1.0` release assets are packaged, checksummed, attested, and SBOM-backed | Published GitHub release and successful release-assembly job | The overall tag run is red because its crates.io job had no configured token; no crate was uploaded |
 | Real-agent performance claim | None | The [pilot](https://github.com/MysterionRise/forgetest/tree/master/studies/rust-agent-pilot) and 72-trial study remain unexecuted |
 
 ## Reproduce Locally

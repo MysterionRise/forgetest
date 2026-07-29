@@ -70,8 +70,10 @@ Upload `public/report.sarif` only after redaction review.
 cross-platform archives, publishes the verifier image to GHCR, records its
 immutable digest, generates per-crate CycloneDX JSON SBOMs, writes
 `SHA256SUMS`, and creates GitHub provenance attestations for both the image and
-release assets. It then publishes crates in dependency order, including
-`forgetest-agents`.
+release assets. When the protected `crates-io` environment contains a non-empty
+`CARGO_REGISTRY_TOKEN`, it then publishes crates in dependency order, including
+`forgetest-agents`. Without that credential, the workflow reports the registry
+channel as disabled and leaves the GitHub release complete.
 
 These are workflow guarantees, not claims about an unreleased tag. Verify a
 published asset with `gh attestation verify` against this repository.
@@ -85,7 +87,9 @@ Crates are published in dependency order through `scripts/publish-crates.sh`.
 The publisher independently checks the exact crates.io version and archive
 checksum, skips only an identical already-visible package, and waits for each
 new package to become visible. A release job can therefore resume after a
-partial registry publication without accepting mismatched content.
+partial registry publication without accepting mismatched content. The
+credential gate is outside this script, so an enabled publisher still fails
+closed on authentication and registry errors.
 
 ## Evidence Site
 

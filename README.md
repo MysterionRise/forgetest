@@ -61,12 +61,19 @@ shows report structure and provenance, not paid-model performance.
 ## Install
 
 Release archives contain a single `forgetest` binary plus licenses, the
-changelog, and README. The crate installation path is:
+changelog, and README. Download the archive for your platform from the
+[GitHub releases page](https://github.com/MysterionRise/forgetest/releases),
+verify it against `SHA256SUMS`, and place the binary on your `PATH`.
+
+To install from a source checkout:
 
 ```bash
-cargo install forgetest-cli --version 0.1.0 --locked
+cargo install --path crates/forgetest-cli --locked
 forgetest --version
 ```
+
+The crates.io publication channel is credential-gated and was not enabled for
+`v0.1.0`; do not rely on `cargo install forgetest-cli` for this release.
 
 ## Try It Without Keys
 
