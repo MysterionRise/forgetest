@@ -318,7 +318,10 @@ async fn process_agent_enforces_output_limit() {
     let mut permissions = std::fs::metadata(&script).unwrap().permissions();
     permissions.set_mode(0o700);
     std::fs::set_permissions(&script, permissions).unwrap();
-    let profile = CommandProfile::generic(script.to_string_lossy(), EventParser::Text);
+    let mut profile = CommandProfile::generic("/bin/sh", EventParser::Text);
+    profile
+        .arguments
+        .push(script.to_string_lossy().into_owned());
     let agent = ProcessAgent::new(profile, identity("generic"));
 
     let outcome = agent
