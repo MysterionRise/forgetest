@@ -33,3 +33,5 @@ First public proof-of-concept release.
 - The six-trial pilot and 72-trial public study are pre-registered but
   unexecuted.
 - Hardened Docker execution is not presented as safe for hostile repositories.
+- `v0.1.0` is available as an attested GitHub release; its credential-gated
+  crates.io channel was not enabled.
