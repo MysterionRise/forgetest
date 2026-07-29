@@ -41,6 +41,9 @@ jobs:
       - name: Deny rustdoc warnings
         run: cargo doc --workspace --no-deps --locked
 
+      - name: Check release portability
+        run: bash scripts/check-release-portability.sh
+
       - name: Build and verify Pages artifact
         run: |
           if ! mdbook --version 2>/dev/null | grep -Fqx 'mdbook v0.4.52'; then
@@ -91,6 +94,37 @@ jobs:
 
       - name: Run all targets
         run: cargo test --workspace --all-targets --locked
+
+  release-portability:
+    name: ARM64 Linux release build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Cache Cargo state
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: linux-cross-aarch64-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+
+      - name: Check native dependency portability
+        run: bash scripts/check-release-portability.sh
+
+      - name: Install cross
+        shell: bash
+        run: |
+          if ! cross --version 2>/dev/null | grep -Fqx 'cross 0.2.5'; then
+            cargo install cross --version 0.2.5 --locked --force
+          fi
+
+      - name: Cross-build release binary
+        run: cross build --release --locked --target aarch64-unknown-linux-gnu --package forgetest-cli
 
   offline-proof:
     name: Deterministic local proof
