@@ -29,6 +29,18 @@ timeout_secs = 120                # Override default timeout
 max_tokens = 4096                 # Override max tokens for generation
 ```
 
+Optional Rust crate dependencies use inline TOML tables:
+
+```toml
+dependencies = [
+  { name = "tokio", version = "1", features = ["full"] }
+]
+```
+
+The local runner can resolve arbitrary reviewed dependencies through Cargo.
+The offline Docker snippet runner accepts only its bundled v0.1 allowlist:
+`tokio` version `1`, with no features or the `full` feature.
+
 ## Expectations
 
 Each case has an `[cases.expectations]` section:
@@ -97,10 +109,16 @@ Use tags to organize and filter cases:
 
 ```bash
 # Only run cases tagged "algorithms"
-forgetest run --eval-set eval-sets/rust-basics.toml --filter algorithms
+forgetest run \
+  --config ./forgetest.toml \
+  --eval-set eval-sets/rust-basics.toml \
+  --filter algorithms
 
 # Run multiple tags
-forgetest run --eval-set eval-sets/rust-basics.toml --filter "algorithms,strings"
+forgetest run \
+  --config ./forgetest.toml \
+  --eval-set eval-sets/rust-basics.toml \
+  --filter "algorithms,strings"
 ```
 
 ## Validating Eval Sets
@@ -129,8 +147,10 @@ instead of being silently ignored.
 You can pass a directory to `--eval-set` to run all `.toml` files in it:
 
 ```bash
-forgetest run --eval-set eval-sets/
+forgetest run --config ./forgetest.toml --eval-set eval-sets/
 forgetest validate --eval-set eval-sets/
 ```
 
 Group related cases into separate files by topic, difficulty, or feature area.
+Project-local configuration is not discovered automatically; pass `--config`
+or place it at `~/.config/forgetest/config.toml`.

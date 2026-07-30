@@ -1,6 +1,6 @@
 # CI Evidence
 
-The checked-in `.github/workflows/ci.yml` defines four proof jobs.
+The checked-in `.github/workflows/ci.yml` defines five proof jobs.
 
 ## Quality and Supply Chain
 
@@ -8,6 +8,8 @@ The checked-in `.github/workflows/ci.yml` defines four proof jobs.
 - All-target Clippy with warnings denied.
 - Rustdoc with warnings denied.
 - mdBook build.
+- Pages artifact and public-evidence contract checks.
+- Resumable crate-publisher tests.
 - Workspace package dry run.
 - RustSec advisory scan.
 - License and source policy scan.
@@ -16,6 +18,11 @@ The checked-in `.github/workflows/ci.yml` defines four proof jobs.
 
 `cargo test --workspace --all-targets --locked` runs on Linux, macOS, and
 Windows with Rust 1.92.0 from `rust-toolchain.toml`.
+
+## Release Portability
+
+The Linux portability job rejects native dependency drift and cross-builds the
+release binary for `aarch64-unknown-linux-gnu`.
 
 ## Deterministic Local Proof
 

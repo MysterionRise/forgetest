@@ -50,8 +50,9 @@ Not claimed:
 [The evidence ledger](docs/src/evidence.md) links the publication-safe reports
 and separates executable proof from roadmap claims. The Pages workflow
 publishes that ledger after a successful default-branch deployment. CI
-calibrates all 12 tasks, executes both deterministic demos, and verifies each
-artifact manifest.
+calibrates all 12 tasks, executes the snippet and repository demos with local
+and Docker verification, and verifies the repository evidence manifests plus
+the committed sample-report contract.
 
 ![Redacted repository trial report](docs/src/assets/repository-report.png)
 
@@ -75,25 +76,55 @@ forgetest --version
 The crates.io publication channel is credential-gated and was not enabled for
 `v0.1.0`; do not rely on `cargo install forgetest-cli` for this release.
 
-## Try It Without Keys
+Local verification requires `cargo` and `rustc`; snippet evaluation also runs
+Clippy. This repository pins Rust 1.92.0 with the required components in
+`rust-toolchain.toml`. Docker examples require Docker Engine, and real-agent
+examples additionally require the selected agent CLI and its credential.
+
+All examples below use the installed `forgetest` binary. From a source
+checkout, `forgetest demo ...` is equivalent to:
+
+```bash
+cargo run --locked --bin forgetest -- demo ...
+```
+
+## First Run: No Keys
 
 The repository demo exercises materialization, agent edits, hidden grading,
 patch capture, redaction, HTML/SARIF rendering, and evidence manifests:
 
 ```bash
-cargo run --locked --bin forgetest -- \
-  demo --mode repository --runner local \
+forgetest demo \
+  --mode repository \
+  --runner local \
   --output ./forgetest-results --format all
 ```
 
-Open `forgetest-results/public/report.html`. The agent is scripted and
-deterministic; the compile and test work is real.
+A successful run exits with status 0 and creates the key artifacts below:
+
+```text
+forgetest-results/
+  raw/report.html
+  raw/report.json
+  raw/trials/<trial-id>/changes.patch
+  raw/trials/<trial-id>/trace.jsonl
+  public/report.html
+  public/report.json
+  public/artifact-manifest.json
+```
+
+Open `forgetest-results/public/report.html`. The agent edit is scripted and
+deterministic; workspace reconstruction, compilation, tests, grading,
+redaction, and report generation are executed normally. Use a fresh output
+path when repeating a repository demo.
 
 The legacy snippet loop is still available:
 
 ```bash
-cargo run --locked --bin forgetest -- \
-  demo --runner local --output ./snippet-results --format all
+forgetest demo \
+  --mode snippet \
+  --runner local \
+  --output ./snippet-results --format all
 ```
 
 ## Docker Proof
@@ -105,12 +136,14 @@ docker build \
   -f docker/forgetest-runner-rust.Dockerfile \
   -t forgetest-runner-rust:0.1.0 .
 
-cargo run --locked --bin forgetest -- \
-  demo --mode repository --runner docker \
+forgetest demo \
+  --mode repository \
+  --runner docker \
   --output ./repository-docker-results --format all
 
-cargo run --locked --bin forgetest -- \
-  demo --runner docker \
+forgetest demo \
+  --mode snippet \
+  --runner docker \
   --output ./snippet-docker-results --format all
 ```
 
@@ -118,6 +151,9 @@ The Docker verifier uses a read-only root filesystem, non-root UID, no network,
 no capabilities, `no-new-privileges`, tmpfs build output, resource limits, and
 only the per-trial verification workspace mount. See [SECURITY.md](SECURITY.md)
 for guarantees and non-guarantees.
+
+The Docker build and the corpus paths below require a source checkout and must
+be run from its root.
 
 ## Calibrated Corpus
 
@@ -134,8 +170,9 @@ for guarantees and non-guarantees.
 Prove that every null patch fails and every reference patch passes:
 
 ```bash
-cargo run --locked --bin forgetest -- \
-  validate --suite eval-suites/rust-agent-v1/suite.toml --calibrate
+forgetest validate \
+  --suite eval-suites/rust-agent-v1/suite.toml \
+  --calibrate
 ```
 
 Calibration runs trusted suite commands on the host. It is appropriate for the
@@ -147,21 +184,24 @@ Local development mode runs installed agent CLIs under an explicit environment
 allowlist and uses the selected verifier:
 
 ```bash
-cargo run --locked --bin forgetest -- \
-  agents doctor --agents codex/MODEL,claude/MODEL
+forgetest agents doctor \
+  --agents codex/MODEL,claude/MODEL
 
-cargo run --locked --bin forgetest -- \
-  run --suite eval-suites/rust-agent-v1/suite.toml \
+forgetest run \
+  --suite eval-suites/rust-agent-v1/suite.toml \
   --agents codex/MODEL,claude/MODEL \
   --trials 1 --profile development --runner docker \
   --output ./agent-results --format all
 ```
 
+Replace each `MODEL` with an exact model identifier accepted by that installed
+agent CLI. The harness rejects moving aliases in benchmark locks.
+
 Published benchmark mode requires immutable agent and verifier images. First
 create an exact lock:
 
 ```bash
-cargo run --locked --bin forgetest -- agents lock \
+forgetest agents lock \
   --suite eval-suites/rust-agent-v1/suite.toml \
   --agent codex/MODEL=registry.example/codex@sha256:DIGEST \
   --agent claude/MODEL=registry.example/claude@sha256:DIGEST \
@@ -175,8 +215,8 @@ cargo run --locked --bin forgetest -- agents lock \
 Then run the sealed policy:
 
 ```bash
-cargo run --locked --bin forgetest -- \
-  run --suite eval-suites/rust-agent-v1/suite.toml \
+forgetest run \
+  --suite eval-suites/rust-agent-v1/suite.toml \
   --agents codex,claude --trials 3 --profile benchmark \
   --benchmark-lock benchmark.lock.toml \
   --output ./study-run --format all
@@ -220,22 +260,26 @@ With `--format all`, raw bundles contain:
 
 - `report.json`, self-contained `report.html`, and deterministic-only SARIF.
 - Per-trial `trace.jsonl`, `changes.patch`, and grader stdout/stderr.
-- `artifact-manifest.json` with SHA-256 and size for every bundle file.
+- `artifact-manifest.json` with SHA-256 and size for every other bundle file.
 
-Public bundles remove known secrets, credential-shaped values, configured host
-paths, raw vendor events, free-form model messages, private reasoning fields,
-private artifact references, and free-form text from retained event categories.
-Event type, timestamp, and sequence remain available for public timelines:
+Repository runs write both bundles automatically. Public bundles remove known
+secrets, credential-shaped values, configured host paths, raw vendor events,
+free-form model messages, private reasoning fields, private artifact
+references, and free-form text from retained event categories. Event type,
+timestamp, and sequence remain available for public timelines. To re-redact a
+saved raw report, select a new output path:
 
 ```bash
 forgetest redact \
   --input ./study-run/raw/report.json \
-  --output ./study-run/public \
+  --output ./study-run/public-review \
   --format all
 ```
 
-Repository run, demo, and redaction output directories must be absent or empty.
-This prevents files from an older run entering a new artifact inventory.
+Use a fresh output path for repository runs, repository demos, and redaction;
+these workflows reject non-empty evidence destinations. Snippet runs write
+timestamped report files and may reuse a directory, although a fresh directory
+is easier to audit.
 
 Schema v2 comparisons gate only when suite, task, and execution-policy digests
 match. `--allow-incomparable` permits an explicitly non-gating comparison.
@@ -248,11 +292,15 @@ The original provider path remains supported for small function-level tests:
 forgetest validate --eval-set eval-sets/rust-basics.toml
 
 forgetest run \
+  --config ./forgetest.toml \
   --eval-set eval-sets/rust-basics.toml \
-  --models anthropic/MODEL,openai/MODEL \
+  --models anthropic/MODEL \
   --pass-k 1,3 --temperature 0.7 \
   --output ./snippet-results --format all
 ```
+
+Run `forgetest init` in a new directory to generate a starter config and eval
+set. A project-local config is loaded only when passed with `--config`.
 
 Snippet scoring is diagnostic, not the repository benchmark outcome:
 

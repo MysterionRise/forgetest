@@ -22,7 +22,7 @@ pub fn execute() -> Result<()> {
     }
 
     println!("\nNext steps:");
-    println!("  1. Select an exact model ID and configure provider credentials");
+    println!("  1. Select an exact model ID and configure the active provider");
     println!("  2. Run: forgetest validate --eval-set eval-sets/example.toml");
     println!("  3. Run: forgetest run --config forgetest.toml --eval-set eval-sets/example.toml");
 
@@ -40,13 +40,17 @@ parallelism = 4
 type = "anthropic"
 api_key = "${ANTHROPIC_API_KEY}"
 
-[providers.openai]
-type = "openai"
-api_key = "${OPENAI_API_KEY}"
-
-[providers.ollama]
-type = "ollama"
-base_url = "http://localhost:11434"
+# Configure one active provider at a time unless every credential reference is
+# available. To use OpenAI or Ollama instead, change default_provider and
+# default_model above, then replace the Anthropic section:
+#
+# [providers.openai]
+# type = "openai"
+# api_key = "${OPENAI_API_KEY}"
+#
+# [providers.ollama]
+# type = "ollama"
+# base_url = "http://localhost:11434"
 
 [runner]
 type = "local"
@@ -130,5 +134,7 @@ mod tests {
             config.default_model,
             forgetest_providers::config::UNCONFIGURED_MODEL_ID
         );
+        assert_eq!(config.providers.len(), 1);
+        assert!(config.providers.contains_key("anthropic"));
     }
 }

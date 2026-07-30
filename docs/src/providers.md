@@ -50,12 +50,25 @@ Use exact model IDs appropriate to the provider at run time:
 
 ```bash
 forgetest run \
+  --config ./forgetest.toml \
   --eval-set eval-sets/rust-basics.toml \
   --models anthropic/MODEL,openai/MODEL
 ```
 
+Every credential reference in a configured provider section must resolve when
+the configuration is loaded. Remove or comment out unused provider sections
+instead of leaving references to unset credentials.
+
 `forgetest list-models` queries Ollama asynchronously. Static provider entries
 are informational and should not be treated as a vendor availability promise.
+
+```bash
+forgetest list-models --config ./forgetest.toml --provider ollama
+```
+
+A project-local `forgetest.toml` is used only when passed with `--config`.
+Without that flag, `forgetest` checks
+`~/.config/forgetest/config.toml`.
 
 ## Credential References
 

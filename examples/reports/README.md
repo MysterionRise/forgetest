@@ -1,8 +1,10 @@
 # Demo Reports
 
-These artifacts were generated on 2026-07-27 from the working tree represented
-by each report's provenance fields. `git_dirty = true` is intentional and makes
-clear that these are implementation samples, not signed release evidence.
+These artifacts were generated on 2026-07-27 as implementation samples, not
+signed release evidence. The snippet manifests record the source commit and
+`git_dirty = true`. Repository schema v2 records suite, task, agent, and policy
+digests; its public artifact manifest records the published files and their
+checksums.
 
 | Directory | Path exercised | Evidence type |
 |---|---|---|
@@ -15,10 +17,12 @@ Generation commands:
 
 ```bash
 cargo run --locked --bin forgetest -- \
-  demo --runner local --output /tmp/forgetest-snippet-local --format all
+  demo --mode snippet --runner local \
+  --output /tmp/forgetest-snippet-local --format all
 
 cargo run --locked --bin forgetest -- \
-  demo --runner docker --output /tmp/forgetest-snippet-docker --format all
+  demo --mode snippet --runner docker \
+  --output /tmp/forgetest-snippet-docker --format all
 
 cargo run --locked --bin forgetest -- \
   demo --mode repository --runner local \
@@ -29,8 +33,10 @@ cargo run --locked --bin forgetest -- \
   --output /tmp/forgetest-repository-docker --format all
 ```
 
-Each output path must be absent or empty before generation. The commands above
-are provenance examples; committed artifact replacement is a deliberate review
+Repository demo output paths must be fresh because evidence workflows reject
+non-empty destinations. Snippet demos write timestamped files and can reuse an
+output directory, although a fresh path is clearer. The commands above are
+provenance examples; committed artifact replacement is a deliberate review
 step.
 
 Only each repository demo's redacted `public/` directory is copied here. The
