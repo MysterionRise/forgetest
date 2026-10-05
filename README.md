@@ -7,11 +7,13 @@ Execution-backed regression and evidence harness for Rust coding agents.
 [![Release](https://img.shields.io/github/v/release/MysterionRise/forgetest?display_name=tag)](https://github.com/MysterionRise/forgetest/releases)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
-`forgetest` gives a coding agent a fresh repository task, records a typed event
-trace under output-byte and normalized-event limits, captures the resulting
-filesystem patch independently of Git, and grades that patch in a clean
-verification workspace. It preserves the original provider-based snippet
-evaluator, but repository-level agent trials are the primary v1 direction.
+`forgetest` gives a coding agent a task in a fresh repository and records what
+it does as a typed event trace, capped by output-byte and normalized-event
+limits. It then captures the resulting filesystem patch independently of Git
+and grades that patch in a clean verification workspace.
+
+The original provider-based snippet evaluator is still included, but
+repository-level agent trials are the main direction for v1.
 
 The project is designed to answer a narrow engineering question:
 
@@ -73,8 +75,8 @@ cargo install --path crates/forgetest-cli --locked
 forgetest --version
 ```
 
-The crates.io publication channel is credential-gated and was not enabled for
-`v0.1.0`; do not rely on `cargo install forgetest-cli` for this release.
+`v0.1.0` is not published to crates.io, so `cargo install forgetest-cli` will
+not work for this release.
 
 Local verification requires `cargo` and `rustc`; snippet evaluation also runs
 Clippy. This repository pins Rust 1.92.0 with the required components in
@@ -396,7 +398,7 @@ redacted evidence are published.
 
 - [Architecture](ARCHITECTURE.md)
 - [Security model](SECURITY.md)
-- [CTO case study](docs/src/case-study.md)
+- [Case study](docs/src/case-study.md)
 - [Changelog](CHANGELOG.md)
 - [Repository suite format](docs/src/repository-suites.md)
 - [Benchmark operations](docs/src/advanced.md)
