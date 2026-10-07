@@ -12,6 +12,11 @@ updates:
       - automated
     commit-message:
       prefix: "deps"
+    groups:
+      cargo-minor-patch:
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
@@ -24,3 +29,7 @@ updates:
       - ci
     commit-message:
       prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

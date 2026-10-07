@@ -10,6 +10,14 @@ All notable changes to `forgetest` are documented here.
   0.23.45 with `rustls-webpki` 0.103.15 (RUSTSEC-2026-0285), and replaced the
   yanked `chacha20` 0.10.1 with 0.10.2.
 
+### Changed
+
+- CI also runs weekly and on manual dispatch, so new advisories fail on
+  `master` instead of on the next unrelated pull request.
+- Dependabot groups cargo minor/patch updates and GitHub Actions updates into
+  one pull request each, so stale updates can no longer exhaust its open
+  pull-request limit.
+
 ## 0.1.0 - 2026-07-29
 
 First public proof-of-concept release.

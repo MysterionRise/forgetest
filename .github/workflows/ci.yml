@@ -5,6 +5,11 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  schedule:
+    # Weekly run so new RustSec advisories and toolchain drift fail on master
+    # instead of on the next unrelated pull request.
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
