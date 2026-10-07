@@ -16,8 +16,14 @@ grader, and CI runner.
 |---|---|---|---|
 | Local snippet | Trusted development | Host policy | Temp project and cleared child environment; not a sandbox |
 | Docker snippet | Bundled allowlisted cases | None | Hardened container boundary |
-| Local repository | Audited suites during development | Agent CLI may use network; grader uses host | Process isolation only; not for publication |
+| Local repository | Audited suites during development and integration pilots | Agent CLI may use network; grader uses host or Docker | Process isolation only; not benchmark evidence |
 | Benchmark repository | Published audited studies | Agent bridge; verifier none | Ephemeral agent container plus independent hardened verifier |
+
+The pre-registered six-trial pilot uses the local repository mode for agents
+on a trusted host, with the independent Docker verifier for grading. Its
+published evidence documents that integration configuration. It is not
+presented as benchmark-mode evidence, which requires agent containers and a
+benchmark lock.
 
 ## Repository Benchmark Boundary
 
@@ -71,7 +77,11 @@ agent/verifier images, Docker network mode, host environment interpolation, or
 trusted benchmark policy. Unknown fields are rejected.
 
 Credential interpolation is limited to documented API-key variables. Child
-processes receive an explicit allowlist after `env_clear`.
+processes receive an explicit allowlist after `env_clear`. Host agent and local
+grader processes additionally receive the host Rust toolchain location
+(`RUSTUP_HOME`, `RUSTUP_TOOLCHAIN`, `RUSTC`, `RUSTDOC`) and TLS certificate
+paths so that `cargo` works; host agents keep `CARGO_HOME` under their isolated
+per-trial home.
 
 ## Budgets and Cleanup
 

@@ -1,0 +1,8 @@
+schema_version = 2
+id = "rust-agent-v1-smoke"
+name = "forgetest Rust Agent v1 Smoke"
+description = "One non-pilot task for checking a real agent configuration end to end before a study run."
+
+[[tasks]]
+id = "retry-policy"
+path = "tasks/retry-policy"
