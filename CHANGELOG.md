@@ -2,6 +2,14 @@
 
 All notable changes to `forgetest` are documented here.
 
+## Unreleased
+
+### Security
+
+- Upgraded transitive `h2` to 0.4.20 (RUSTSEC-2026-0258) and `rustls` to
+  0.23.45 with `rustls-webpki` 0.103.15 (RUSTSEC-2026-0285), and replaced the
+  yanked `chacha20` 0.10.1 with 0.10.2.
+
 ## 0.1.0 - 2026-07-29
 
 First public proof-of-concept release.
