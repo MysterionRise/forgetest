@@ -15,4 +15,5 @@ pub mod repository_report;
 pub mod results;
 pub mod statistics;
 pub mod suite;
+pub mod toolchain;
 pub mod traits;

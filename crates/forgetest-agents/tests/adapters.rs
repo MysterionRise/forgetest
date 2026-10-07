@@ -664,3 +664,39 @@ fn doctor_reports_version_without_exposing_auth_values() {
     assert_eq!(result.version.as_deref(), Some("fake-agent 1.2.3"));
     assert!(!format!("{result:?}").contains("sk-"));
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn process_agent_can_run_host_cargo_from_isolated_home() {
+    let root = tempfile::tempdir().unwrap();
+    let mut profile = CommandProfile::generic("/bin/sh", EventParser::Text);
+    profile.arguments.extend([
+        "-c".to_string(),
+        "cargo --version && test -z \"$CARGO_HOME\"".to_string(),
+    ]);
+    let agent = ProcessAgent::new(profile, identity("generic"));
+
+    let outcome = agent
+        .execute(
+            &AgentRequest {
+                trial_id: Uuid::new_v4(),
+                task_id: "task".into(),
+                prompt: "work".into(),
+                workspace: root.path().to_path_buf(),
+                limits: AgentLimits {
+                    timeout_secs: 60,
+                    ..AgentLimits::default()
+                },
+            },
+            &MemoryEventSink::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        (outcome.termination, outcome.exit_code),
+        (AgentTerminationReason::Completed, Some(0)),
+        "agent could not run cargo with an isolated home: {:?}",
+        outcome.events
+    );
+}

@@ -14,6 +14,7 @@ use forgetest_core::agent::{
     AgentEvent, AgentEventKind, AgentExecutor, AgentIdentity, AgentOutcome, AgentRequest,
     AgentTerminationReason, AgentUsage, EventSink, WorkspaceEnvironment,
 };
+use forgetest_core::toolchain::rust_toolchain_environment;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::{Child, Command};
@@ -820,6 +821,9 @@ impl AgentExecutor for ProcessAgent {
         if let Some(path) = std::env::var_os("PATH") {
             command.env("PATH", path);
         }
+        // Agents build and test in the workspace, so they need the host
+        // toolchain; CARGO_HOME stays under the isolated per-trial home.
+        command.envs(rust_toolchain_environment());
         for variable in &self.profile.environment_allowlist {
             if let Some(value) = std::env::var_os(variable) {
                 command.env(variable, value);

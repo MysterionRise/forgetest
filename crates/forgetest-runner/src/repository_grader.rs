@@ -10,6 +10,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use forgetest_core::agent::{GradeCheckRequest, GradeRequest, Grader};
 use forgetest_core::repository_report::{GraderCheck, GraderOutcome};
+use forgetest_core::toolchain::rust_toolchain_environment;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::{Child, Command};
 use tokio::sync::Notify;
@@ -400,33 +401,12 @@ fn ensure_docker_started(output: &BoundedOutput) -> Result<()> {
 }
 
 fn copy_toolchain_environment(command: &mut Command) {
-    for variable in [
-        "PATH",
-        "RUSTUP_HOME",
-        "CARGO_HOME",
-        "RUSTUP_TOOLCHAIN",
-        "RUSTC",
-        "RUSTDOC",
-        "SSL_CERT_FILE",
-        "SSL_CERT_DIR",
-        "NIX_SSL_CERT_FILE",
-    ] {
+    for variable in ["PATH", "CARGO_HOME"] {
         if let Some(value) = std::env::var_os(variable) {
             command.env(variable, value);
         }
     }
-    if std::env::var_os("RUSTUP_HOME").is_none() {
-        for variable in ["HOME", "USERPROFILE"] {
-            let Some(home) = std::env::var_os(variable) else {
-                continue;
-            };
-            let rustup_home = Path::new(&home).join(".rustup");
-            if rustup_home.is_dir() {
-                command.env("RUSTUP_HOME", rustup_home);
-                break;
-            }
-        }
-    }
+    command.envs(rust_toolchain_environment());
     configure_platform_toolchain_environment(command);
 }
 

@@ -10,6 +10,15 @@ All notable changes to `forgetest` are documented here.
   0.23.45 with `rustls-webpki` 0.103.15 (RUSTSEC-2026-0285), and replaced the
   yanked `chacha20` 0.10.1 with 0.10.2.
 
+### Fixed
+
+- Host development agents now inherit the host Rust toolchain location
+  (`RUSTUP_HOME`, `RUSTUP_TOOLCHAIN`, `RUSTC`, `RUSTDOC`) and TLS certificate
+  variables. Previously the isolated agent home left rustup without a default
+  toolchain, so agents could not run `cargo` in task workspaces. `CARGO_HOME`
+  still resolves under the isolated per-trial home. The local grader shares
+  the same toolchain discovery.
+
 ### Changed
 
 - CI also runs weekly and on manual dispatch, so new advisories fail on
