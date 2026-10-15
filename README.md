@@ -424,8 +424,10 @@ compatibility.
 - Unix host-agent processes are terminated as a process group. Windows host
   development mode can only guarantee termination of the direct child; use
   container benchmark mode for published evidence.
-- Agent-reported token and cost fields are evidence from vendor output, not
-  independently metered billing records.
+- Token and cost fields come from the agent's own event stream or an
+  operator-supplied pricing table, labelled by `cost_source`. They are not
+  independently metered billing records. A trial without usable usage records
+  `cost_source = "unavailable"` instead of a zero cost.
 - Exact requested model strings are locked, but server-side model routing cannot
   be independently verified when an agent vendor does not report it.
 - `custom_check` in legacy snippet files fails as unsupported rather than

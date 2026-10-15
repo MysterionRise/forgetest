@@ -11,9 +11,10 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use chrono::Utc;
 use forgetest_core::agent::{
-    AgentEvent, AgentEventKind, AgentExecutor, AgentIdentity, AgentOutcome, AgentRequest,
-    AgentTerminationReason, AgentUsage, EventSink, WorkspaceEnvironment,
+    AgentEvent, AgentEventKind, AgentExecutor, AgentIdentity, AgentLimits, AgentOutcome,
+    AgentRequest, AgentTerminationReason, AgentUsage, CostSource, EventSink, WorkspaceEnvironment,
 };
+use forgetest_core::pricing::PricingTable;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::{Child, Command};
@@ -233,6 +234,52 @@ pub enum EventParser {
     ClaudeStreamJson,
     GenericJsonl,
     Text,
+}
+
+impl EventParser {
+    /// Whether this stream is documented to report token usage.
+    pub fn reports_tokens(self) -> bool {
+        matches!(self, Self::CodexJsonl | Self::ClaudeStreamJson)
+    }
+
+    /// Whether this stream is documented to report the vendor's own cost.
+    pub fn reports_vendor_cost(self) -> bool {
+        matches!(self, Self::ClaudeStreamJson)
+    }
+}
+
+/// Fail when an agent cannot report the usage that the configured caps need.
+///
+/// Built-in adapters are judged by their stream contract; the scripted
+/// adapter and unknown adapters report no usage and cannot enforce any cap.
+/// An agent without an explicit model can never match an exact price.
+pub fn ensure_caps_enforceable(
+    adapter: &str,
+    model: Option<&str>,
+    limits: &AgentLimits,
+    max_run_cost_usd: Option<f64>,
+    pricing: Option<&PricingTable>,
+) -> Result<()> {
+    let label = match model {
+        Some(model) => format!("agent '{adapter}' model '{model}'"),
+        None => format!("agent '{adapter}' without an explicit model"),
+    };
+    let parser = builtin_profile(adapter, model.unwrap_or("unspecified"), None)
+        .ok()
+        .map(|profile| profile.parser);
+    let reports_tokens = parser.is_some_and(EventParser::reports_tokens);
+    anyhow::ensure!(
+        limits.max_tokens.is_none() || reports_tokens,
+        "{label} does not report token usage, so the token cap cannot be enforced"
+    );
+    let cost_capped = limits.max_cost_usd.is_some() || max_run_cost_usd.is_some();
+    let priced = reports_tokens
+        && model.is_some_and(|model| pricing.is_some_and(|table| table.price(model).is_some()));
+    anyhow::ensure!(
+        !cost_capped || parser.is_some_and(EventParser::reports_vendor_cost) || priced,
+        "{label} reports no vendor cost and has no pricing entry, so the cost cap cannot be enforced"
+    );
+    Ok(())
 }
 
 /// Noninteractive command profile for an external agent.
@@ -478,6 +525,8 @@ impl AgentExecutor for ScriptedAgent {
             termination: AgentTerminationReason::Completed,
             exit_code: Some(0),
             duration_ms: start.elapsed().as_millis() as u64,
+            // No model runs, so nothing is metered and the cost source stays
+            // unset; benchmark caps are rejected for this adapter.
             usage: AgentUsage::default(),
             events: emitted,
             error: None,
@@ -489,6 +538,7 @@ impl AgentExecutor for ScriptedAgent {
 pub struct ProcessAgent {
     profile: CommandProfile,
     identity: AgentIdentity,
+    pricing: Option<PricingTable>,
 }
 
 /// Resource and network policy for an outer agent container.
@@ -520,6 +570,7 @@ pub struct DockerProcessAgent {
     profile: CommandProfile,
     identity: AgentIdentity,
     config: DockerAgentConfig,
+    pricing: Option<PricingTable>,
 }
 
 impl DockerProcessAgent {
@@ -532,7 +583,14 @@ impl DockerProcessAgent {
             profile,
             identity,
             config,
+            pricing: None,
         }
+    }
+
+    /// Price reported tokens when the stream carries no vendor cost.
+    pub fn with_pricing(mut self, pricing: Option<PricingTable>) -> Self {
+        self.pricing = pricing;
+        self
     }
 
     pub fn docker_arguments(&self, container_name: &str, workspace: &Path) -> Vec<String> {
@@ -749,7 +807,8 @@ impl AgentExecutor for DockerProcessAgent {
             parser: self.profile.parser,
             environment_allowlist: outer_environment,
         };
-        let process = ProcessAgent::new(docker_profile, self.identity.clone());
+        let process = ProcessAgent::new(docker_profile, self.identity.clone())
+            .with_pricing(self.pricing.clone());
         let result = process.execute(request, events).await;
         if result.as_ref().map_or(true, |outcome| {
             outcome.termination != AgentTerminationReason::Completed
@@ -781,7 +840,17 @@ impl WorkspaceEnvironment for DirectWorkspaceEnvironment {
 
 impl ProcessAgent {
     pub fn new(profile: CommandProfile, identity: AgentIdentity) -> Self {
-        Self { profile, identity }
+        Self {
+            profile,
+            identity,
+            pricing: None,
+        }
+    }
+
+    /// Price reported tokens when the stream carries no vendor cost.
+    pub fn with_pricing(mut self, pricing: Option<PricingTable>) -> Self {
+        self.pricing = pricing;
+        self
     }
 }
 
@@ -937,7 +1006,9 @@ impl AgentExecutor for ProcessAgent {
         if let Stop::Prompt(error) = &stop {
             anyhow::bail!("failed to deliver prompt to agent: {error:#}");
         }
-        let usage = usage_from_events(&parsed_events);
+        let observed = observe_usage(&parsed_events, self.profile.parser);
+        let tokens_reported = observed.as_ref().is_some_and(|usage| usage.tokens_reported);
+        let usage = priced_usage(observed, &self.identity.model, self.pricing.as_ref());
         let observed_exit_code = match &stop {
             Stop::Exited(status) => status.code(),
             Stop::Timeout | Stop::OutputLimit | Stop::Prompt(_) | Stop::EventSink(_) => None,
@@ -945,11 +1016,18 @@ impl AgentExecutor for ProcessAgent {
         let budget_exceeded = request
             .limits
             .max_tokens
-            .is_some_and(|limit| usage.input_tokens + usage.output_tokens > limit)
+            .is_some_and(|limit| tokens_reported && usage.budget_tokens() > limit)
             || request
                 .limits
                 .max_cost_usd
-                .is_some_and(|limit| usage.estimated_cost_usd > limit);
+                .is_some_and(|limit| usage.cost_known() && usage.estimated_cost_usd > limit);
+        // An agent that ran to its own exit without the usage a cap needs
+        // cannot be shown to have respected it. Timeouts keep their status.
+        let cost_capped = request.limits.max_cost_usd.is_some() || request.limits.run_cost_capped;
+        let budget_unverifiable = request.limits.require_enforceable_usage
+            && matches!(stop, Stop::Exited(_))
+            && ((request.limits.max_tokens.is_some() && !tokens_reported)
+                || (cost_capped && !usage.cost_known()));
 
         let (termination, exit_code, error) = if output_exceeded {
             (
@@ -963,6 +1041,21 @@ impl AgentExecutor for ProcessAgent {
                 observed_exit_code,
                 Some("agent-reported usage exceeded configured budget".into()),
             )
+        } else if budget_unverifiable {
+            let mut message = "budget unverifiable: agent did not report the usage needed to \
+                               enforce the configured cap"
+                .to_string();
+            if let Stop::Exited(status) = &stop {
+                if !status.success() {
+                    message.push_str("; agent also exited non-zero: ");
+                    message.push_str(&exit_stderr_message(&stderr));
+                }
+            }
+            (
+                AgentTerminationReason::BudgetUnverifiable,
+                observed_exit_code,
+                Some(message),
+            )
         } else {
             match stop {
                 Stop::Exited(status) if status.success() => {
@@ -971,7 +1064,7 @@ impl AgentExecutor for ProcessAgent {
                 Stop::Exited(status) => (
                     AgentTerminationReason::ExitNonZero,
                     status.code(),
-                    Some(String::from_utf8_lossy(&stderr).trim().to_string()),
+                    Some(exit_stderr_message(&stderr)),
                 ),
                 Stop::Timeout => (
                     AgentTerminationReason::Timeout,
@@ -998,6 +1091,12 @@ impl AgentExecutor for ProcessAgent {
             error,
         })
     }
+}
+
+/// Error text for a non-zero exit. `stderr` is already bounded by the
+/// output collector's byte limit.
+fn exit_stderr_message(stderr: &[u8]) -> String {
+    String::from_utf8_lossy(stderr).trim().to_string()
 }
 
 async fn deliver_prompt(mut stdin: tokio::process::ChildStdin, prompt: &[u8]) -> Result<()> {
@@ -1292,38 +1391,151 @@ fn event_message(value: &serde_json::Value) -> Option<String> {
         })
 }
 
-fn usage_from_events(events: &[AgentEvent]) -> AgentUsage {
-    let mut usage = AgentUsage::default();
-    for raw in events.iter().filter_map(|event| event.raw.as_ref()) {
-        let source = raw.get("usage").unwrap_or(raw);
-        usage.input_tokens = usage.input_tokens.max(
-            source
-                .get("input_tokens")
-                .or_else(|| source.get("inputTokens"))
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or(0),
-        );
-        usage.output_tokens = usage.output_tokens.max(
-            source
-                .get("output_tokens")
-                .or_else(|| source.get("outputTokens"))
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or(0),
-        );
-        usage.cached_tokens = usage.cached_tokens.max(
-            source
-                .get("cached_tokens")
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or(0),
-        );
-        usage.estimated_cost_usd = usage.estimated_cost_usd.max(
-            source
-                .get("estimated_cost_usd")
-                .or_else(|| source.get("total_cost_usd"))
-                .and_then(serde_json::Value::as_f64)
-                .unwrap_or(0.0),
-        );
+/// Usage normalized from one agent stream before pricing.
+struct ObservedUsage {
+    usage: AgentUsage,
+    tokens_reported: bool,
+    vendor_cost_usd: Option<f64>,
+}
+
+/// Normalize the usage a parser's stream reports, or `None` when it reports
+/// none. Missing usage is never turned into zero.
+fn observe_usage(events: &[AgentEvent], parser: EventParser) -> Option<ObservedUsage> {
+    let raw_events = events.iter().filter_map(|event| event.raw.as_ref());
+    let last_of_type = |event_type: &str| {
+        raw_events
+            .clone()
+            .rfind(|raw| raw.get("type").and_then(serde_json::Value::as_str) == Some(event_type))
+    };
+    match parser {
+        // Claude's final `result` event carries cumulative usage and cost.
+        EventParser::ClaudeStreamJson => last_of_type("result").and_then(claude_result_usage),
+        // Codex reports cumulative session usage on `turn.completed`.
+        EventParser::CodexJsonl => last_of_type("turn.completed").and_then(codex_turn_usage),
+        EventParser::GenericJsonl | EventParser::Text => generic_usage(raw_events),
     }
+}
+
+fn claude_result_usage(raw: &serde_json::Value) -> Option<ObservedUsage> {
+    let token = |key: &str| {
+        raw.get("usage")
+            .and_then(|usage| usage.get(key))
+            .and_then(serde_json::Value::as_u64)
+    };
+    let input = token("input_tokens");
+    let output = token("output_tokens");
+    let vendor_cost_usd = raw
+        .get("total_cost_usd")
+        .and_then(serde_json::Value::as_f64)
+        .filter(|cost| cost.is_finite() && *cost >= 0.0);
+    let tokens_reported = input.is_some() && output.is_some();
+    if !tokens_reported && vendor_cost_usd.is_none() {
+        return None;
+    }
+    Some(ObservedUsage {
+        usage: AgentUsage {
+            input_tokens: input.unwrap_or(0),
+            output_tokens: output.unwrap_or(0),
+            cached_tokens: token("cache_read_input_tokens").unwrap_or(0),
+            cache_write_tokens: token("cache_creation_input_tokens").unwrap_or(0),
+            ..AgentUsage::default()
+        },
+        tokens_reported,
+        vendor_cost_usd,
+    })
+}
+
+fn codex_turn_usage(raw: &serde_json::Value) -> Option<ObservedUsage> {
+    let usage = raw.get("usage")?;
+    let token = |key: &str| usage.get(key).and_then(serde_json::Value::as_u64);
+    let input = token("input_tokens")?;
+    let output = token("output_tokens")?;
+    let cached = token("cached_input_tokens").unwrap_or(0);
+    // Cached input is part of input; more cached than total is malformed.
+    if cached > input {
+        return None;
+    }
+    Some(ObservedUsage {
+        usage: AgentUsage {
+            // Codex input includes cached input; record only the uncached part.
+            input_tokens: input - cached,
+            output_tokens: output,
+            cached_tokens: cached,
+            reasoning_tokens: token("reasoning_output_tokens").unwrap_or(0),
+            ..AgentUsage::default()
+        },
+        tokens_reported: true,
+        vendor_cost_usd: None,
+    })
+}
+
+/// Per-field maximum over the historical generic keys, read from `usage`
+/// first and then from the event itself.
+fn generic_usage<'a>(
+    raw_events: impl Iterator<Item = &'a serde_json::Value>,
+) -> Option<ObservedUsage> {
+    let mut observed: Option<ObservedUsage> = None;
+    let (mut input_seen, mut output_seen) = (false, false);
+    for raw in raw_events {
+        let field = |keys: &[&str]| {
+            [raw.get("usage"), Some(raw)]
+                .into_iter()
+                .flatten()
+                .find_map(|source| keys.iter().find_map(|key| source.get(*key)))
+        };
+        let input = field(&["input_tokens", "inputTokens"]).and_then(serde_json::Value::as_u64);
+        let output = field(&["output_tokens", "outputTokens"]).and_then(serde_json::Value::as_u64);
+        let cached = field(&["cached_tokens"]).and_then(serde_json::Value::as_u64);
+        let cost = field(&["estimated_cost_usd", "total_cost_usd"])
+            .and_then(serde_json::Value::as_f64)
+            .filter(|cost| cost.is_finite() && *cost >= 0.0);
+        if input.is_none() && output.is_none() && cached.is_none() && cost.is_none() {
+            continue;
+        }
+        let current = observed.get_or_insert(ObservedUsage {
+            usage: AgentUsage::default(),
+            tokens_reported: false,
+            vendor_cost_usd: None,
+        });
+        input_seen |= input.is_some();
+        output_seen |= output.is_some();
+        // Like Claude, token usage counts only when input and output are both reported.
+        current.tokens_reported = input_seen && output_seen;
+        current.usage.input_tokens = current.usage.input_tokens.max(input.unwrap_or(0));
+        current.usage.output_tokens = current.usage.output_tokens.max(output.unwrap_or(0));
+        current.usage.cached_tokens = current.usage.cached_tokens.max(cached.unwrap_or(0));
+        if let Some(cost) = cost {
+            current.vendor_cost_usd = Some(current.vendor_cost_usd.unwrap_or(0.0).max(cost));
+        }
+    }
+    observed
+}
+
+/// Attach a cost with vendor-first precedence, then the pricing table.
+fn priced_usage(
+    observed: Option<ObservedUsage>,
+    model: &str,
+    pricing: Option<&PricingTable>,
+) -> AgentUsage {
+    let Some(observed) = observed else {
+        return AgentUsage::unavailable();
+    };
+    // Partial token counts cannot be checked against a cap, so a stream that
+    // did not report both input and output records no token counts at all.
+    let mut usage = if observed.tokens_reported {
+        observed.usage
+    } else {
+        AgentUsage::default()
+    };
+    let table_cost = observed
+        .tokens_reported
+        .then(|| pricing.and_then(|table| table.cost(model, &usage)))
+        .flatten();
+    (usage.estimated_cost_usd, usage.cost_source) = match (observed.vendor_cost_usd, table_cost) {
+        (Some(cost), _) => (cost, Some(CostSource::Vendor)),
+        (None, Some(cost)) => (cost, Some(CostSource::PricingTable)),
+        (None, None) => (0.0, Some(CostSource::Unavailable)),
+    };
     usage
 }
 

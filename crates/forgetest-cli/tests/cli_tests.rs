@@ -1296,3 +1296,614 @@ fn make_test_report(
 }}"#
     )
 }
+
+const TEST_PRICING: &str = r#"schema_version = 1
+retrieved_on = "2026-10-15"
+
+[[models]]
+model = "test-model"
+input_usd_per_mtok = 2.0
+cache_read_usd_per_mtok = 0.5
+cache_write_usd_per_mtok = 0.0
+output_usd_per_mtok = 10.0
+"#;
+
+/// Install a fake `codex` that fixes the task and reports `turn.completed` usage.
+#[cfg(unix)]
+fn write_usage_reporting_codex(bin: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    std::fs::create_dir_all(bin).unwrap();
+    let codex = bin.join("codex");
+    std::fs::write(
+        &codex,
+        r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "codex-cli test"
+  exit 0
+fi
+cat >/dev/null
+printf 'pub fn add(a: i32, b: i32) -> i32 { a + b }\n' > src/lib.rs
+printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1000,"cached_input_tokens":400,"output_tokens":100}}'
+"#,
+    )
+    .unwrap();
+    let mut permissions = std::fs::metadata(&codex).unwrap().permissions();
+    permissions.set_mode(0o700);
+    std::fs::set_permissions(&codex, permissions).unwrap();
+}
+
+#[cfg(unix)]
+fn path_with(bin: &Path) -> String {
+    format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    )
+}
+
+#[cfg(unix)]
+#[test]
+fn repository_run_prices_codex_usage_and_publishes_a_verifiable_pricing_table() {
+    let root = TempDir::new().unwrap();
+    write_repository_suite(root.path());
+    let bin = root.path().join("bin");
+    write_usage_reporting_codex(&bin);
+    let pricing = root.path().join("pricing.toml");
+    std::fs::write(&pricing, TEST_PRICING).unwrap();
+    let output = root.path().join("results");
+
+    forgetest()
+        .env("PATH", path_with(&bin))
+        .arg("run")
+        .arg("--suite")
+        .arg(root.path().join("suite.toml"))
+        .arg("--agents")
+        .arg("codex/test-model")
+        .arg("--trials")
+        .arg("1")
+        .arg("--runner")
+        .arg("local")
+        .arg("--max-agent-cost-usd")
+        .arg("1")
+        .arg("--max-run-cost-usd")
+        .arg("5")
+        .arg("--pricing")
+        .arg(&pricing)
+        .arg("--output")
+        .arg(&output)
+        .arg("--format")
+        .arg("all")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("warning").not())
+        .stderr(predicate::str::contains("1/1 trials passed"));
+
+    let raw: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(output.join("raw/report.json")).unwrap())
+            .unwrap();
+    let usage = &raw["trials"][0]["usage"];
+    assert_eq!(usage["cost_source"], "pricing-table");
+    assert_eq!(usage["input_tokens"], 600);
+    assert_eq!(usage["cached_tokens"], 400);
+    let expected = (600.0 * 2.0 + 400.0 * 0.5 + 100.0 * 10.0) / 1_000_000.0;
+    assert!((usage["estimated_cost_usd"].as_f64().unwrap() - expected).abs() < 1e-12);
+
+    let public = forgetest_core::repository_report::RepositoryReport::load_json(
+        &output.join("public/report.json"),
+    )
+    .unwrap();
+    assert!(public.redaction.redacted);
+    assert!(public.policy.verify_digest());
+    assert_eq!(public.policy.parameters.max_run_cost_usd, Some(5.0));
+    let table = public.policy.parameters.pricing.as_ref().unwrap();
+    assert_eq!(table.models[0].model, "test-model");
+    assert_eq!(table.retrieved_on, "2026-10-15");
+    let html = std::fs::read_to_string(output.join("public/report.html")).unwrap();
+    assert!(html.contains("Pricing table"));
+}
+
+#[cfg(unix)]
+#[test]
+fn repository_run_development_warns_and_records_unavailable_cost() {
+    let root = TempDir::new().unwrap();
+    write_repository_suite(root.path());
+    let bin = root.path().join("bin");
+    write_usage_reporting_codex(&bin);
+    let output = root.path().join("results");
+
+    forgetest()
+        .env("PATH", path_with(&bin))
+        .arg("run")
+        .arg("--suite")
+        .arg(root.path().join("suite.toml"))
+        .arg("--agents")
+        .arg("codex/test-model")
+        .arg("--trials")
+        .arg("1")
+        .arg("--runner")
+        .arg("local")
+        .arg("--max-agent-cost-usd")
+        .arg("1")
+        .arg("--output")
+        .arg(&output)
+        .arg("--format")
+        .arg("all")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "warning: agent 'codex' model 'test-model' reports no vendor cost",
+        ))
+        .stderr(predicate::str::contains("1/1 trials passed"));
+
+    let raw: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(output.join("raw/report.json")).unwrap())
+            .unwrap();
+    assert_eq!(raw["trials"][0]["usage"]["cost_source"], "unavailable");
+    assert_eq!(raw["trials"][0]["usage"]["input_tokens"], 600);
+    let aggregate = raw["aggregate"]["per_agent"].as_object().unwrap();
+    let stats = aggregate.values().next().unwrap();
+    assert_eq!(stats["cost_unavailable_trials"], 1);
+    let html = std::fs::read_to_string(output.join("raw/report.html")).unwrap();
+    assert!(html.contains("<td>unavailable</td>"));
+}
+
+#[test]
+fn repository_run_rejects_invalid_pricing_before_any_trial_without_its_path() {
+    let root = TempDir::new().unwrap();
+    write_repository_suite(root.path());
+    let pricing = root.path().join("pricing.toml");
+    std::fs::write(
+        &pricing,
+        TEST_PRICING.replace("output_usd_per_mtok = 10.0", "output_usd_per_mtok = -10.0"),
+    )
+    .unwrap();
+    let output = root.path().join("results");
+
+    forgetest()
+        .arg("run")
+        .arg("--suite")
+        .arg(root.path().join("suite.toml"))
+        .arg("--agents")
+        .arg("codex/test-model")
+        .arg("--trials")
+        .arg("1")
+        .arg("--runner")
+        .arg("local")
+        .arg("--pricing")
+        .arg(&pricing)
+        .arg("--output")
+        .arg(&output)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("finite and non-negative"))
+        .stderr(predicate::str::contains(root.path().to_string_lossy().as_ref()).not());
+
+    std::fs::write(&pricing, format!("{TEST_PRICING}currency = \"EUR\"\n")).unwrap();
+    forgetest()
+        .arg("run")
+        .arg("--suite")
+        .arg(root.path().join("suite.toml"))
+        .arg("--agents")
+        .arg("codex/test-model")
+        .arg("--runner")
+        .arg("local")
+        .arg("--pricing")
+        .arg(&pricing)
+        .arg("--output")
+        .arg(&output)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown field"))
+        .stderr(predicate::str::contains(root.path().to_string_lossy().as_ref()).not());
+
+    assert!(!output.join("raw/trials").exists());
+}
+
+#[test]
+fn repository_run_benchmark_rejects_unenforceable_cost_cap_before_docker() {
+    const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let root = TempDir::new().unwrap();
+    write_repository_suite(root.path());
+    let lock = root.path().join("benchmark.lock.toml");
+    std::fs::write(
+        &lock,
+        format!(
+            r#"schema_version = 1
+created_at = "2026-10-15T12:00:00Z"
+suite_digest = "{DIGEST}"
+policy_digest = "{DIGEST}"
+verifier_image = "example/verifier@sha256:{DIGEST}"
+
+[[agents]]
+name = "codex"
+model = "test-model"
+cli_version = "codex-cli test"
+executable_sha256 = "{DIGEST}"
+configuration_digest = "{DIGEST}"
+container_image = "example/codex@sha256:{DIGEST}"
+"#
+        ),
+    )
+    .unwrap();
+
+    forgetest()
+        .env("PATH", "/nonexistent")
+        .arg("run")
+        .arg("--suite")
+        .arg(root.path().join("suite.toml"))
+        .arg("--agents")
+        .arg("codex")
+        .arg("--profile")
+        .arg("benchmark")
+        .arg("--benchmark-lock")
+        .arg(&lock)
+        .arg("--max-run-cost-usd")
+        .arg("5")
+        .arg("--output")
+        .arg(root.path().join("results"))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "agent 'codex' model 'test-model' reports no vendor cost and has no pricing entry",
+        ));
+}
+
+#[cfg(unix)]
+#[test]
+fn agents_lock_rejects_unpriced_cost_cap_and_records_exact_pricing() {
+    use std::os::unix::fs::PermissionsExt;
+
+    const DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    let root = TempDir::new().unwrap();
+    write_repository_suite(root.path());
+    let bin = root.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let docker_calls = root.path().join("docker-calls.log");
+    let docker = bin.join("docker");
+    std::fs::write(
+        &docker,
+        format!(
+            r#"#!/bin/sh
+printf '%s\n' "$*" >> "{}"
+case "$*" in
+  *cargo*)
+    printf 'path=/usr/local/cargo\n{DIGEST_B}  /usr/local/cargo\ncargo 1.92.0\n'
+    ;;
+  *)
+    printf 'path=/usr/local/bin/codex\n{DIGEST_A}  /usr/local/bin/codex\ncodex-cli test\n'
+    ;;
+esac
+"#,
+            docker_calls.display()
+        ),
+    )
+    .unwrap();
+    let mut permissions = std::fs::metadata(&docker).unwrap().permissions();
+    permissions.set_mode(0o700);
+    std::fs::set_permissions(&docker, permissions).unwrap();
+    let pricing = root.path().join("pricing.toml");
+    std::fs::write(&pricing, TEST_PRICING).unwrap();
+    let lock_command = |output: &Path| {
+        let mut command = forgetest();
+        command
+            .env("PATH", path_with(&bin))
+            .arg("agents")
+            .arg("lock")
+            .arg("--suite")
+            .arg(root.path().join("suite.toml"))
+            .arg("--agent")
+            .arg(format!("codex/test-model=codex-agent@sha256:{DIGEST_A}"))
+            .arg("--verifier-image")
+            .arg(format!("runner@sha256:{DIGEST_B}"))
+            .arg("--parallelism")
+            .arg("1")
+            .arg("--max-agent-cost-usd")
+            .arg("1")
+            .arg("--output")
+            .arg(output);
+        command
+    };
+
+    let rejected = root.path().join("rejected.lock.toml");
+    lock_command(&rejected)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "agent 'codex' model 'test-model' reports no vendor cost and has no pricing entry",
+        ));
+    assert!(!rejected.exists());
+    assert!(!docker_calls.exists());
+
+    let accepted = root.path().join("benchmark.lock.toml");
+    lock_command(&accepted)
+        .arg("--pricing")
+        .arg(&pricing)
+        .arg("--max-run-cost-usd")
+        .arg("5")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Run cost cap: USD 5"))
+        .stdout(predicate::str::contains(
+            "Pricing: 1 models retrieved 2026-10-15",
+        ));
+    let lock = forgetest_agents::BenchmarkLock::load(&accepted).unwrap();
+    assert_eq!(lock.agents[0].model, "test-model");
+}
+
+const BENCHMARK_AGENT_SHA: &str =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const BENCHMARK_CARGO_SHA: &str =
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+/// Fake `docker` for a full benchmark run. It answers the verifier and Codex
+/// image preflights, plays the Codex container against its bind-mounted
+/// workspace by printing `agent_line`, and passes every grader check.
+#[cfg(unix)]
+fn write_benchmark_docker(bin: &Path, agent_line: &str) {
+    use std::os::unix::fs::PermissionsExt;
+
+    std::fs::create_dir_all(bin).unwrap();
+    let docker = bin.join("docker");
+    std::fs::write(
+        &docker,
+        format!(
+            r#"#!/bin/sh
+case "$*" in
+  *--interactive*)
+    cat >/dev/null
+    previous=""
+    for argument in "$@"; do
+      if [ "$previous" = "--mount" ]; then
+        workspace="${{argument#type=bind,src=}}"
+        workspace="${{workspace%,dst=/work}}"
+      fi
+      previous="$argument"
+    done
+    printf 'pub fn add(a: i32, b: i32) -> i32 {{ a + b }}\n' > "$workspace/src/lib.rs"
+    printf '%s\n' '{agent_line}'
+    ;;
+  *cargo*)
+    printf 'path=/usr/local/cargo\n{BENCHMARK_CARGO_SHA}  /usr/local/cargo\ncargo 1.92.0\n'
+    ;;
+  *)
+    printf 'path=/usr/local/bin/codex\n{BENCHMARK_AGENT_SHA}  /usr/local/bin/codex\ncodex-cli test\n'
+    ;;
+esac
+"#
+        ),
+    )
+    .unwrap();
+    let mut permissions = std::fs::metadata(&docker).unwrap().permissions();
+    permissions.set_mode(0o700);
+    std::fs::set_permissions(&docker, permissions).unwrap();
+}
+
+/// Lock a priced Codex benchmark with `caps`, then run it with the same policy.
+#[cfg(unix)]
+fn lock_and_run_priced_benchmark(
+    root: &Path,
+    agent_line: &str,
+    caps: &[&str],
+) -> serde_json::Value {
+    write_repository_suite(root);
+    let bin = root.join("bin");
+    write_benchmark_docker(&bin, agent_line);
+    let pricing = root.join("pricing.toml");
+    std::fs::write(&pricing, TEST_PRICING).unwrap();
+    let lock = root.join("benchmark.lock.toml");
+    forgetest()
+        .env("PATH", path_with(&bin))
+        .arg("agents")
+        .arg("lock")
+        .arg("--suite")
+        .arg(root.join("suite.toml"))
+        .arg("--agent")
+        .arg(format!(
+            "codex/test-model=codex-agent@sha256:{BENCHMARK_AGENT_SHA}"
+        ))
+        .arg("--verifier-image")
+        .arg(format!("runner@sha256:{BENCHMARK_CARGO_SHA}"))
+        .args(["--trials", "1", "--parallelism", "1"])
+        .arg("--pricing")
+        .arg(&pricing)
+        .args(caps)
+        .arg("--output")
+        .arg(&lock)
+        .assert()
+        .success();
+
+    let output = root.join("results");
+    forgetest()
+        .env("PATH", path_with(&bin))
+        .arg("run")
+        .arg("--suite")
+        .arg(root.join("suite.toml"))
+        .args(["--agents", "codex", "--profile", "benchmark"])
+        .arg("--benchmark-lock")
+        .arg(&lock)
+        .args(["--trials", "1", "--parallelism", "1"])
+        .arg("--pricing")
+        .arg(&pricing)
+        .args(caps)
+        .arg("--output")
+        .arg(&output)
+        .assert()
+        .success();
+    serde_json::from_str(&std::fs::read_to_string(output.join("raw/report.json")).unwrap()).unwrap()
+}
+
+#[cfg(unix)]
+#[test]
+fn benchmark_run_prices_codex_usage_through_the_agent_container() {
+    let root = TempDir::new().unwrap();
+
+    let report = lock_and_run_priced_benchmark(
+        root.path(),
+        r#"{"type":"turn.completed","usage":{"input_tokens":1000,"cached_input_tokens":400,"output_tokens":100}}"#,
+        &["--max-agent-cost-usd", "1", "--max-run-cost-usd", "5"],
+    );
+
+    let trial = &report["trials"][0];
+    assert_eq!(trial["status"], "passed", "{trial:#}");
+    assert_eq!(trial["usage"]["cost_source"], "pricing-table");
+    assert_eq!(trial["usage"]["input_tokens"], 600);
+    assert_eq!(report["policy"]["profile"], "benchmark");
+    assert_eq!(
+        report["policy"]["parameters"]["pricing"]["models"][0]["model"],
+        "test-model"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn benchmark_run_fails_closed_when_the_agent_reports_no_usage() {
+    let root = TempDir::new().unwrap();
+
+    let report = lock_and_run_priced_benchmark(
+        root.path(),
+        r#"{"type":"item.completed","item":{"type":"agent_message","text":"done"}}"#,
+        &["--max-agent-cost-usd", "1"],
+    );
+
+    let trial = &report["trials"][0];
+    assert_eq!(trial["status"], "agent_error", "{trial:#}");
+    assert_eq!(trial["termination_reason"], "budget_unverifiable");
+    assert!(trial["error"]
+        .as_str()
+        .unwrap()
+        .contains("budget unverifiable"));
+    assert_eq!(trial["usage"]["cost_source"], "unavailable");
+    assert!(trial["grader"].is_null());
+}
+
+#[test]
+fn repository_run_rejects_invalid_run_cost_caps_before_any_trial() {
+    let root = TempDir::new().unwrap();
+    write_repository_suite(root.path());
+    let output = root.path().join("results");
+
+    for value in ["0", "-1", "NaN", "inf"] {
+        forgetest()
+            .arg("run")
+            .arg("--suite")
+            .arg(root.path().join("suite.toml"))
+            .args(["--agents", "codex/test-model", "--runner", "local"])
+            .arg(format!("--max-run-cost-usd={value}"))
+            .arg("--output")
+            .arg(&output)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "max-run-cost-usd must be a positive finite number",
+            ));
+    }
+    assert!(!output.join("raw/trials").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn repository_run_breaker_cancels_unstarted_trials_in_raw_and_public_reports() {
+    let root = TempDir::new().unwrap();
+    write_repository_suite(root.path());
+    let bin = root.path().join("bin");
+    write_usage_reporting_codex(&bin);
+    let pricing = root.path().join("pricing.toml");
+    std::fs::write(&pricing, TEST_PRICING).unwrap();
+    let output = root.path().join("results");
+
+    forgetest()
+        .env("PATH", path_with(&bin))
+        .arg("run")
+        .arg("--suite")
+        .arg(root.path().join("suite.toml"))
+        .args(["--agents", "codex/test-model", "--runner", "local"])
+        .args(["--trials", "3", "--parallelism", "1"])
+        .arg("--pricing")
+        .arg(&pricing)
+        .args(["--max-run-cost-usd", "0.001"])
+        .arg("--output")
+        .arg(&output)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("overshoot it without bound"))
+        .stderr(predicate::str::contains(
+            "2 trials cancelled: run cost cap reached",
+        ))
+        .stderr(predicate::str::contains("1/3 trials passed"));
+
+    for bundle in ["raw", "public"] {
+        let report = forgetest_core::repository_report::RepositoryReport::load_json(
+            &output.join(bundle).join("report.json"),
+        )
+        .unwrap();
+        let statuses: Vec<_> = report.trials.iter().map(|trial| trial.status).collect();
+        use forgetest_core::repository_report::TrialStatus;
+        assert_eq!(
+            statuses,
+            vec![
+                TrialStatus::Passed,
+                TrialStatus::Cancelled,
+                TrialStatus::Cancelled
+            ],
+            "{bundle}"
+        );
+        assert!(report.trials[1..]
+            .iter()
+            .all(|trial| trial.agent_attempts == 0));
+        let stats = report.aggregate.per_agent.values().next().unwrap();
+        assert_eq!((stats.scheduled, stats.cancelled), (3, 2));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn repository_run_development_warns_that_unpriced_cost_trips_the_run_breaker() {
+    let root = TempDir::new().unwrap();
+    write_repository_suite(root.path());
+    let bin = root.path().join("bin");
+    write_usage_reporting_codex(&bin);
+    let output = root.path().join("results");
+
+    forgetest()
+        .env("PATH", path_with(&bin))
+        .arg("run")
+        .arg("--suite")
+        .arg(root.path().join("suite.toml"))
+        .args(["--agents", "codex/test-model", "--runner", "local"])
+        .args(["--trials", "2", "--parallelism", "1"])
+        .args(["--max-agent-cost-usd", "1", "--max-run-cost-usd", "5"])
+        .arg("--output")
+        .arg(&output)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "the run cost breaker cancels every trial not yet started",
+        ))
+        .stderr(predicate::str::contains("overshoot it without bound").not())
+        .stderr(predicate::str::contains(
+            "1 trials cancelled: run cost unverifiable",
+        ));
+}
+
+#[test]
+fn repository_run_checks_caps_for_agents_without_an_explicit_model() {
+    let root = TempDir::new().unwrap();
+    write_repository_suite(root.path());
+
+    forgetest()
+        .arg("run")
+        .arg("--suite")
+        .arg(root.path().join("suite.toml"))
+        .args(["--agents", "codex", "--runner", "local"])
+        .args(["--max-agent-cost-usd", "1"])
+        .arg("--output")
+        .arg(root.path().join("results"))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "warning: agent 'codex' without an explicit model reports no vendor cost",
+        ))
+        .stderr(predicate::str::contains("requires an explicit model"));
+}

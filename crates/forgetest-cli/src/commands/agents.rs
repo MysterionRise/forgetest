@@ -12,7 +12,10 @@ use forgetest_core::agent::AgentLimits;
 use forgetest_core::suite::load_suite;
 use forgetest_providers::config::{load_config_from, RunnerType};
 
-use crate::commands::repository_run::{build_execution_policy, RepositoryPolicyOptions};
+use crate::commands::repository_run::{
+    build_execution_policy, ensure_run_cost_cap, load_pricing, preflight_cap_enforceability,
+    RepositoryPolicyOptions,
+};
 
 pub async fn doctor(agents: Option<String>, benchmark_lock: Option<PathBuf>) -> Result<()> {
     let default_agents;
@@ -84,6 +87,8 @@ pub async fn lock(
     max_agent_output_bytes: usize,
     max_agent_tokens: Option<u64>,
     max_agent_cost_usd: Option<f64>,
+    max_run_cost_usd: Option<f64>,
+    pricing_path: Option<PathBuf>,
     agent_retries: u32,
     config_path: Option<PathBuf>,
 ) -> Result<()> {
@@ -106,6 +111,8 @@ pub async fn lock(
             "max-agent-cost-usd must be a positive finite number"
         );
     }
+    ensure_run_cost_cap(max_run_cost_usd)?;
+    let pricing = load_pricing(pricing_path.as_deref())?;
     anyhow::ensure!(
         is_immutable_image(&verifier_image),
         "verifier image must use NAME@sha256:DIGEST with a complete SHA-256"
@@ -135,6 +142,24 @@ pub async fn lock(
             "effort was provided for unrequested agent '{name}'"
         );
     }
+    let agent_limits = AgentLimits {
+        timeout_secs: agent_timeout_secs,
+        max_output_bytes: max_agent_output_bytes,
+        max_retries: agent_retries,
+        max_tokens: max_agent_tokens,
+        max_cost_usd: max_agent_cost_usd,
+        require_enforceable_usage: true,
+        run_cost_capped: max_run_cost_usd.is_some(),
+    };
+    preflight_cap_enforceability(
+        "benchmark",
+        specs
+            .iter()
+            .map(|spec| (spec.name.as_str(), Some(spec.model.as_str()))),
+        &agent_limits,
+        max_run_cost_usd,
+        pricing.as_ref(),
+    )?;
     doctor_verifier_container(&verifier_image)
         .await
         .with_context(|| format!("failed to inspect verifier image {verifier_image}"))?;
@@ -165,13 +190,6 @@ pub async fn lock(
         });
     }
 
-    let agent_limits = AgentLimits {
-        timeout_secs: agent_timeout_secs,
-        max_output_bytes: max_agent_output_bytes,
-        max_retries: agent_retries,
-        max_tokens: max_agent_tokens,
-        max_cost_usd: max_agent_cost_usd,
-    };
     let policy = build_execution_policy(
         &config,
         RepositoryPolicyOptions {
@@ -182,6 +200,8 @@ pub async fn lock(
             trials,
             parallelism,
             agent_limits,
+            max_run_cost_usd,
+            pricing,
         },
     );
     let lock = BenchmarkLock {
@@ -196,6 +216,16 @@ pub async fn lock(
     println!("Benchmark lock: {}", output.display());
     println!("  Suite SHA-256: {}", lock.suite_digest);
     println!("  Policy SHA-256: {}", lock.policy_digest);
+    if let Some(cap) = policy.parameters.max_run_cost_usd {
+        println!("  Run cost cap: USD {cap}");
+    }
+    if let Some(pricing) = &policy.parameters.pricing {
+        println!(
+            "  Pricing: {} models retrieved {}; pass the same --pricing file to run",
+            pricing.models.len(),
+            pricing.retrieved_on
+        );
+    }
     for agent in &lock.agents {
         println!(
             "  {} / {}: {} ({})",
