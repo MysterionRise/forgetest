@@ -20,7 +20,7 @@ source_identities:
   studies/rust-agent-pilot/README.md: 6095b6e507b6acbf2261630b1639abfc3d77ffed26581704025ad9d7bcb8ede9
   docs/book.toml: 9139b870f6941f36c0f9f6dd7fc8d808cff399f2be00a021e77d207a47274ed4
   docs/src/SUMMARY.md: eac5289fd4fa3089f8e7bf7c6847273141350add2a76e5de102a4587c3c0f234
-  .github/workflows/ci.yml: 3ec5cb6452290cd608adc2e76d9984b26e73557776a7f9a2b9002de4433ba729
+  .github/workflows/ci.yml: 6e5a17af4a3e854459e0dea0e1595daee735f4394419b01137f8ed7315daee7b
 protected_study_tree_identities:
   algorithm: sha256-normalized-file-manifest-v1
   roots:

@@ -298,8 +298,8 @@ verify_adversarial_guards() {
     context_path="$fixture_root/_bmad-output/project-context.md"
     old_ci_hash="$(sha256_file "$ci_path")"
     replace_token "$ci_path" \
-      '          python-version: "3.10.0"' \
-      '          python-version: "3.10"'
+      '          python-version: "3.14.8"' \
+      '          python-version: "3.14"'
     new_ci_hash="$(sha256_file "$ci_path")"
     replace_token "$context_path" "$old_ci_hash" "$new_ci_hash"
     expect_rejection "ci-python-version-bypass" "$fixture_root" \
