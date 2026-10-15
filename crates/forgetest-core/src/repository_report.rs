@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::agent::{AgentEvent, AgentIdentity, AgentTerminationReason, AgentUsage};
+use crate::agent::{AgentEvent, AgentIdentity, AgentTerminationReason, AgentUsage, CostSource};
+use crate::pricing::PricingTable;
 
 /// Repository report schema version.
 pub const REPOSITORY_REPORT_SCHEMA_VERSION: u32 = 2;
@@ -92,6 +93,7 @@ impl RepositoryReport {
             self.policy.verify_digest(),
             "execution policy digest does not match its recorded parameters"
         );
+        self.policy.validate_cost_terms()?;
 
         let mut trial_ids = HashSet::new();
         let mut scheduled = HashSet::new();
@@ -129,6 +131,18 @@ impl RepositoryReport {
                 trial.agent.key(),
                 trial.trial_index
             );
+            if trial.usage.cost_source == Some(CostSource::PricingTable) {
+                anyhow::ensure!(
+                    self.policy
+                        .parameters
+                        .pricing
+                        .as_ref()
+                        .is_some_and(|pricing| pricing.price(&trial.agent.model).is_some()),
+                    "trial {} cost comes from a pricing table that has no entry for model '{}'",
+                    trial.id,
+                    trial.agent.model
+                );
+            }
         }
 
         let mut seen_agents = HashSet::new();
@@ -259,6 +273,22 @@ impl ExecutionPolicyManifest {
             .is_some_and(|digest| digest == self.digest)
     }
 
+    /// Validate the run cost cap and pricing table covered by the digest.
+    pub fn validate_cost_terms(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.parameters
+                .max_run_cost_usd
+                .is_none_or(|cap| cap.is_finite() && cap > 0.0),
+            "execution policy run cost cap must be a positive finite number"
+        );
+        if let Some(pricing) = &self.parameters.pricing {
+            pricing
+                .validate()
+                .context("execution policy pricing table is invalid")?;
+        }
+        Ok(())
+    }
+
     fn computed_digest(&self) -> Option<String> {
         let material = (
             self.schema_version,
@@ -301,6 +331,13 @@ pub struct ExecutionPolicyParameters {
     pub agent_container: Option<ContainerLimitsManifest>,
     #[serde(default)]
     pub verifier_container: Option<ContainerLimitsManifest>,
+    /// Run-level cost breaker checked before each trial is started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_run_cost_usd: Option<f64>,
+    /// Inline prices for agents without vendor cost; inline so redaction
+    /// cannot rewrite a path and break the digest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pricing: Option<PricingTable>,
 }
 
 /// Container resource limits recorded in a policy manifest.
@@ -485,7 +522,12 @@ pub struct AgentAggregate {
     pub wilson_95_high: f64,
     pub pass_at_1: f64,
     pub pass_power_3: f64,
+    /// Sum of available trial costs; unavailable costs are excluded.
     pub total_cost_usd: f64,
+    /// Trials whose cost is unavailable. Present only when a trial records
+    /// a cost source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_unavailable_trials: Option<u64>,
     pub total_duration_ms: u64,
 }
 
@@ -570,8 +612,18 @@ impl AgentAggregate {
             pass_power_3,
             total_cost_usd: trials
                 .iter()
+                .filter(|trial| trial.usage.cost_available())
                 .map(|trial| trial.usage.estimated_cost_usd)
                 .sum(),
+            cost_unavailable_trials: trials
+                .iter()
+                .any(|trial| trial.usage.cost_source.is_some())
+                .then(|| {
+                    trials
+                        .iter()
+                        .filter(|trial| trial.usage.cost_source == Some(CostSource::Unavailable))
+                        .count() as u64
+                }),
             total_duration_ms: trials.iter().map(|trial| trial.duration_ms).sum(),
         }
     }

@@ -1,12 +1,14 @@
 use forgetest_agents::{
-    builtin_profile, docker_preflight_arguments, doctor, parse_container_doctor_output,
-    profile_configuration_digest, CommandProfile, DirectWorkspaceEnvironment, DockerAgentConfig,
-    DockerProcessAgent, EventParser, MemoryEventSink, ProcessAgent, ScriptedAgent, ScriptedEdit,
+    builtin_profile, docker_preflight_arguments, doctor, ensure_caps_enforceable,
+    parse_container_doctor_output, profile_configuration_digest, CommandProfile,
+    DirectWorkspaceEnvironment, DockerAgentConfig, DockerProcessAgent, EventParser,
+    MemoryEventSink, ProcessAgent, ScriptedAgent, ScriptedEdit,
 };
 use forgetest_core::agent::{
-    AgentExecutor, AgentIdentity, AgentLimits, AgentRequest, AgentTerminationReason,
-    WorkspaceEnvironment,
+    AgentExecutor, AgentIdentity, AgentLimits, AgentOutcome, AgentRequest, AgentTerminationReason,
+    CostSource, WorkspaceEnvironment,
 };
+use forgetest_core::pricing::{ModelPricing, PricingTable};
 use uuid::Uuid;
 
 fn identity(adapter: &str) -> AgentIdentity {
@@ -526,6 +528,7 @@ async fn process_agent_classifies_reported_usage_over_budget() {
     assert_eq!(outcome.usage.input_tokens, 8);
     assert_eq!(outcome.usage.output_tokens, 5);
     assert_eq!(outcome.usage.estimated_cost_usd, 1.25);
+    assert_eq!(outcome.usage.cost_source, Some(CostSource::Vendor));
 }
 
 #[cfg(unix)]
@@ -663,4 +666,445 @@ fn doctor_reports_version_without_exposing_auth_values() {
     assert!(result.executable_found);
     assert_eq!(result.version.as_deref(), Some("fake-agent 1.2.3"));
     assert!(!format!("{result:?}").contains("sk-"));
+}
+
+fn pricing_for(model: &str) -> PricingTable {
+    PricingTable {
+        schema_version: 1,
+        retrieved_on: "2026-10-15".into(),
+        models: vec![ModelPricing {
+            model: model.into(),
+            input_usd_per_mtok: 2.0,
+            cache_read_usd_per_mtok: 0.5,
+            cache_write_usd_per_mtok: 4.0,
+            output_usd_per_mtok: 10.0,
+        }],
+    }
+}
+
+/// Run a shell script that prints `lines` through `parser`, as a vendor CLI would.
+#[cfg(unix)]
+async fn run_stream(
+    parser: EventParser,
+    lines: &[&str],
+    pricing: Option<PricingTable>,
+    limits: AgentLimits,
+) -> AgentOutcome {
+    let mut body = String::from("cat >/dev/null\n");
+    for line in lines {
+        body.push_str(&format!("printf '%s\\n' '{line}'\n"));
+    }
+    run_script(parser, &body, pricing, limits).await
+}
+
+/// Run an arbitrary shell script body as the agent.
+#[cfg(unix)]
+async fn run_script(
+    parser: EventParser,
+    body: &str,
+    pricing: Option<PricingTable>,
+    limits: AgentLimits,
+) -> AgentOutcome {
+    let root = tempfile::tempdir().unwrap();
+    let script = root.path().join("vendor-stream.sh");
+    std::fs::write(&script, body).unwrap();
+    let mut profile = CommandProfile::generic("/bin/sh", parser);
+    profile
+        .arguments
+        .push(script.to_string_lossy().into_owned());
+    ProcessAgent::new(profile, identity("vendor"))
+        .with_pricing(pricing)
+        .execute(
+            &AgentRequest {
+                trial_id: Uuid::new_v4(),
+                task_id: "task".into(),
+                prompt: "work".into(),
+                workspace: root.path().to_path_buf(),
+                limits,
+            },
+            &MemoryEventSink::default(),
+        )
+        .await
+        .unwrap()
+}
+
+const CLAUDE_STREAM: &[&str] = &[
+    r#"{"type":"system","subtype":"init","model":"test-model"}"#,
+    r#"{"type":"assistant","message":{"usage":{"input_tokens":3,"output_tokens":1}}}"#,
+    r#"{"type":"result","subtype":"success","total_cost_usd":0.0123,"usage":{"input_tokens":10,"cache_creation_input_tokens":50,"cache_read_input_tokens":300,"output_tokens":20}}"#,
+];
+
+const CODEX_STREAM: &[&str] = &[
+    r#"{"type":"thread.started","thread_id":"t"}"#,
+    r#"{"type":"turn.started"}"#,
+    r#"{"type":"item.completed","item":{"type":"agent_message","text":"done"}}"#,
+    r#"{"type":"turn.completed","usage":{"input_tokens":1000,"cached_input_tokens":400,"output_tokens":100,"reasoning_output_tokens":30}}"#,
+];
+
+#[cfg(unix)]
+#[tokio::test]
+async fn claude_result_usage_is_normalized_with_vendor_cost_first() {
+    let outcome = run_stream(
+        EventParser::ClaudeStreamJson,
+        CLAUDE_STREAM,
+        Some(pricing_for("test-model")),
+        AgentLimits::default(),
+    )
+    .await;
+
+    assert_eq!(outcome.termination, AgentTerminationReason::Completed);
+    assert_eq!(outcome.usage.input_tokens, 10);
+    assert_eq!(outcome.usage.cached_tokens, 300);
+    assert_eq!(outcome.usage.cache_write_tokens, 50);
+    assert_eq!(outcome.usage.output_tokens, 20);
+    assert_eq!(outcome.usage.estimated_cost_usd, 0.0123);
+    assert_eq!(outcome.usage.cost_source, Some(CostSource::Vendor));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn codex_turn_usage_is_priced_from_the_exact_model_entry() {
+    let outcome = run_stream(
+        EventParser::CodexJsonl,
+        CODEX_STREAM,
+        Some(pricing_for("test-model")),
+        AgentLimits::default(),
+    )
+    .await;
+
+    assert_eq!(outcome.usage.input_tokens, 600);
+    assert_eq!(outcome.usage.cached_tokens, 400);
+    assert_eq!(outcome.usage.output_tokens, 100);
+    assert_eq!(outcome.usage.reasoning_tokens, 30);
+    assert_eq!(outcome.usage.cost_source, Some(CostSource::PricingTable));
+    let expected = (600.0 * 2.0 + 400.0 * 0.5 + 100.0 * 10.0) / 1_000_000.0;
+    assert!((outcome.usage.estimated_cost_usd - expected).abs() < 1e-12);
+
+    let unpriced = run_stream(
+        EventParser::CodexJsonl,
+        CODEX_STREAM,
+        Some(pricing_for("test-model-2")),
+        AgentLimits::default(),
+    )
+    .await;
+    assert_eq!(unpriced.termination, AgentTerminationReason::Completed);
+    assert_eq!(unpriced.usage.input_tokens, 600);
+    assert_eq!(unpriced.usage.estimated_cost_usd, 0.0);
+    assert_eq!(unpriced.usage.cost_source, Some(CostSource::Unavailable));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn token_cap_counts_uncached_cached_and_output_tokens() {
+    let within = run_stream(
+        EventParser::CodexJsonl,
+        CODEX_STREAM,
+        None,
+        AgentLimits {
+            max_tokens: Some(1_100),
+            require_enforceable_usage: true,
+            ..AgentLimits::default()
+        },
+    )
+    .await;
+    assert_eq!(within.termination, AgentTerminationReason::Completed);
+
+    let over = run_stream(
+        EventParser::CodexJsonl,
+        CODEX_STREAM,
+        None,
+        AgentLimits {
+            max_tokens: Some(1_099),
+            ..AgentLimits::default()
+        },
+    )
+    .await;
+    assert_eq!(over.termination, AgentTerminationReason::BudgetExceeded);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn missing_usage_is_unavailable_and_fails_closed_only_when_required() {
+    let stream = &[r#"{"type":"item.completed","item":{"type":"agent_message"}}"#];
+    for parser in [EventParser::CodexJsonl, EventParser::ClaudeStreamJson] {
+        let development = run_stream(
+            parser,
+            stream,
+            None,
+            AgentLimits {
+                max_tokens: Some(10),
+                max_cost_usd: Some(1.0),
+                ..AgentLimits::default()
+            },
+        )
+        .await;
+        assert_eq!(development.termination, AgentTerminationReason::Completed);
+        assert_eq!(development.usage.cost_source, Some(CostSource::Unavailable));
+
+        let benchmark = run_stream(
+            parser,
+            stream,
+            None,
+            AgentLimits {
+                max_tokens: Some(10),
+                require_enforceable_usage: true,
+                ..AgentLimits::default()
+            },
+        )
+        .await;
+        assert_eq!(
+            benchmark.termination,
+            AgentTerminationReason::BudgetUnverifiable
+        );
+        assert!(benchmark
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("budget unverifiable"));
+    }
+
+    let unpriced_cost_cap = run_stream(
+        EventParser::CodexJsonl,
+        CODEX_STREAM,
+        None,
+        AgentLimits {
+            max_cost_usd: Some(1.0),
+            require_enforceable_usage: true,
+            ..AgentLimits::default()
+        },
+    )
+    .await;
+    assert_eq!(
+        unpriced_cost_cap.termination,
+        AgentTerminationReason::BudgetUnverifiable
+    );
+
+    let uncapped = run_stream(
+        EventParser::CodexJsonl,
+        stream,
+        None,
+        AgentLimits {
+            require_enforceable_usage: true,
+            ..AgentLimits::default()
+        },
+    )
+    .await;
+    assert_eq!(uncapped.termination, AgentTerminationReason::Completed);
+    assert_eq!(uncapped.usage.cost_source, Some(CostSource::Unavailable));
+}
+
+#[test]
+fn caps_are_enforceable_only_with_reported_usage_or_exact_pricing() {
+    let cost_cap = AgentLimits {
+        max_cost_usd: Some(1.0),
+        ..AgentLimits::default()
+    };
+    let token_cap = AgentLimits {
+        max_tokens: Some(1_000),
+        ..AgentLimits::default()
+    };
+    let no_cap = AgentLimits::default();
+    let priced = pricing_for("gpt-test");
+
+    let check = |adapter, model, limits, run_cap, pricing| {
+        ensure_caps_enforceable(adapter, model, limits, run_cap, pricing)
+    };
+
+    let error = check("codex", Some("gpt-test"), &cost_cap, None, None).unwrap_err();
+    assert!(error.to_string().contains("'codex'"));
+    assert!(error.to_string().contains("'gpt-test'"));
+    assert!(check("codex", Some("gpt-test"), &no_cap, Some(5.0), None).is_err());
+    assert!(check("codex", Some("gpt-test-2"), &cost_cap, None, Some(&priced)).is_err());
+    assert!(check(
+        "codex",
+        Some("gpt-test"),
+        &cost_cap,
+        Some(5.0),
+        Some(&priced)
+    )
+    .is_ok());
+    assert!(check("codex", Some("gpt-test"), &token_cap, None, None).is_ok());
+    assert!(check("claude", Some("claude-test"), &cost_cap, Some(5.0), None).is_ok());
+
+    // Without an explicit model nothing can match an exact price.
+    let error = check("codex", None, &cost_cap, None, Some(&priced)).unwrap_err();
+    assert!(error.to_string().contains("without an explicit model"));
+    assert!(check("claude", None, &cost_cap, None, None).is_ok());
+
+    for limits in [&cost_cap, &token_cap] {
+        let error = check(
+            "scripted",
+            Some("deterministic-repository-demo"),
+            limits,
+            None,
+            Some(&priced),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("'scripted'"));
+    }
+    assert!(check("scripted", Some("demo"), &no_cap, Some(1.0), None).is_err());
+    assert!(check("scripted", Some("demo"), &no_cap, None, None).is_ok());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn capped_agent_without_usage_is_unverifiable_on_exit_but_keeps_timeout() {
+    let capped = AgentLimits {
+        timeout_secs: 1,
+        max_tokens: Some(1_000),
+        require_enforceable_usage: true,
+        ..AgentLimits::default()
+    };
+
+    let failed = run_script(
+        EventParser::CodexJsonl,
+        "cat >/dev/null\nprintf 'authentication failed\\n' >&2\nexit 3\n",
+        None,
+        capped.clone(),
+    )
+    .await;
+    assert_eq!(
+        failed.termination,
+        AgentTerminationReason::BudgetUnverifiable
+    );
+    assert_eq!(failed.exit_code, Some(3));
+    let error = failed.error.as_deref().unwrap();
+    assert!(error.contains("budget unverifiable"));
+    assert!(error.ends_with("agent also exited non-zero: authentication failed"));
+
+    let timed_out = run_script(
+        EventParser::CodexJsonl,
+        "cat >/dev/null\nwhile true; do sleep 1; done\n",
+        None,
+        capped,
+    )
+    .await;
+    assert_eq!(timed_out.termination, AgentTerminationReason::Timeout);
+    assert_eq!(timed_out.usage.cost_source, Some(CostSource::Unavailable));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn claude_token_cap_counts_cache_write_tokens() {
+    // 10 uncached + 300 cache read + 50 cache write + 20 output = 380.
+    let limits = |cap| AgentLimits {
+        max_tokens: Some(cap),
+        require_enforceable_usage: true,
+        ..AgentLimits::default()
+    };
+    let within = run_stream(
+        EventParser::ClaudeStreamJson,
+        CLAUDE_STREAM,
+        None,
+        limits(380),
+    )
+    .await;
+    assert_eq!(within.termination, AgentTerminationReason::Completed);
+    let over = run_stream(
+        EventParser::ClaudeStreamJson,
+        CLAUDE_STREAM,
+        None,
+        limits(340),
+    )
+    .await;
+    assert_eq!(over.termination, AgentTerminationReason::BudgetExceeded);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn codex_last_turn_wins_and_claude_without_result_is_unavailable() {
+    let codex = run_stream(
+        EventParser::CodexJsonl,
+        &[
+            r#"{"type":"turn.completed","usage":{"input_tokens":9000,"cached_input_tokens":0,"output_tokens":900}}"#,
+            r#"{"type":"turn.completed","usage":{"input_tokens":50,"cached_input_tokens":20,"output_tokens":5}}"#,
+        ],
+        Some(pricing_for("test-model")),
+        AgentLimits::default(),
+    )
+    .await;
+    assert_eq!(codex.usage.input_tokens, 30);
+    assert_eq!(codex.usage.cached_tokens, 20);
+    assert_eq!(codex.usage.output_tokens, 5);
+    assert_eq!(codex.usage.cost_source, Some(CostSource::PricingTable));
+
+    let claude = run_stream(
+        EventParser::ClaudeStreamJson,
+        &CLAUDE_STREAM[..2],
+        Some(pricing_for("test-model")),
+        AgentLimits::default(),
+    )
+    .await;
+    assert_eq!(claude.usage.cost_source, Some(CostSource::Unavailable));
+    assert_eq!(claude.usage.budget_tokens(), 0);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn partial_or_malformed_token_usage_is_not_reported() {
+    let token_cap = AgentLimits {
+        max_tokens: Some(1_000),
+        require_enforceable_usage: true,
+        ..AgentLimits::default()
+    };
+
+    let input_only = run_stream(
+        EventParser::GenericJsonl,
+        &[r#"{"type":"usage","usage":{"input_tokens":8}}"#],
+        Some(pricing_for("test-model")),
+        token_cap.clone(),
+    )
+    .await;
+    assert_eq!(
+        input_only.termination,
+        AgentTerminationReason::BudgetUnverifiable
+    );
+    assert_eq!(input_only.usage.cost_source, Some(CostSource::Unavailable));
+    assert_eq!(input_only.usage.budget_tokens(), 0);
+
+    let malformed = run_stream(
+        EventParser::CodexJsonl,
+        &[r#"{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":40,"output_tokens":5}}"#],
+        Some(pricing_for("test-model")),
+        token_cap,
+    )
+    .await;
+    assert_eq!(
+        malformed.termination,
+        AgentTerminationReason::BudgetUnverifiable
+    );
+    assert_eq!(malformed.usage.cost_source, Some(CostSource::Unavailable));
+    assert_eq!(malformed.usage.budget_tokens(), 0);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn run_cost_cap_alone_requires_a_known_cost() {
+    let run_capped = AgentLimits {
+        run_cost_capped: true,
+        require_enforceable_usage: true,
+        ..AgentLimits::default()
+    };
+
+    let unpriced = run_stream(
+        EventParser::CodexJsonl,
+        CODEX_STREAM,
+        None,
+        run_capped.clone(),
+    )
+    .await;
+    assert_eq!(
+        unpriced.termination,
+        AgentTerminationReason::BudgetUnverifiable
+    );
+
+    let priced = run_stream(
+        EventParser::CodexJsonl,
+        CODEX_STREAM,
+        Some(pricing_for("test-model")),
+        run_capped,
+    )
+    .await;
+    assert_eq!(priced.termination, AgentTerminationReason::Completed);
+    assert_eq!(priced.usage.cost_source, Some(CostSource::PricingTable));
 }

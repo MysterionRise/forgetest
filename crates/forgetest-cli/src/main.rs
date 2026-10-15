@@ -70,6 +70,15 @@ enum Commands {
         #[arg(long)]
         max_agent_cost_usd: Option<f64>,
 
+        /// Stop starting new trials once the run's recorded cost reaches this USD amount.
+        /// In-flight trials still finish; without --max-agent-cost-usd their overshoot is unbounded
+        #[arg(long)]
+        max_run_cost_usd: Option<f64>,
+
+        /// Operator pricing.toml for agents that report tokens but no cost
+        #[arg(long)]
+        pricing: Option<PathBuf>,
+
         /// Retries after an agent process error or non-zero exit
         #[arg(long, default_value = "0")]
         agent_retries: u32,
@@ -214,6 +223,8 @@ enum Commands {
     },
 }
 
+// Parsed once per process, so boxing the larger lock arguments buys nothing.
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum AgentCommands {
     /// Check executable, version, binary hash, and credential presence
@@ -276,6 +287,15 @@ enum AgentCommands {
         /// Maximum agent-reported cost in USD per trial
         #[arg(long)]
         max_agent_cost_usd: Option<f64>,
+
+        /// Stop starting new trials once the run's recorded cost reaches this USD amount.
+        /// In-flight trials still finish; without --max-agent-cost-usd their overshoot is unbounded
+        #[arg(long)]
+        max_run_cost_usd: Option<f64>,
+
+        /// Operator pricing.toml for agents that report tokens but no cost
+        #[arg(long)]
+        pricing: Option<PathBuf>,
 
         /// Retries after an agent process error or non-zero exit
         #[arg(long, default_value = "0")]
@@ -341,6 +361,8 @@ async fn main() {
             agent_timeout_secs,
             max_agent_tokens,
             max_agent_cost_usd,
+            max_run_cost_usd,
+            pricing,
             agent_retries,
             pass_k,
             parallelism,
@@ -376,6 +398,8 @@ async fn main() {
                     agent_timeout_secs,
                     max_agent_tokens,
                     max_agent_cost_usd,
+                    max_run_cost_usd,
+                    pricing_path: pricing,
                     agent_retries,
                     parallelism,
                     output,
@@ -439,6 +463,8 @@ async fn main() {
                 max_agent_output_bytes,
                 max_agent_tokens,
                 max_agent_cost_usd,
+                max_run_cost_usd,
+                pricing,
                 agent_retries,
                 config,
             } => {
@@ -455,6 +481,8 @@ async fn main() {
                     max_agent_output_bytes,
                     max_agent_tokens,
                     max_agent_cost_usd,
+                    max_run_cost_usd,
+                    pricing,
                     agent_retries,
                     config,
                 )

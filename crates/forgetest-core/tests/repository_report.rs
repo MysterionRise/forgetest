@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use chrono::Utc;
-use forgetest_core::agent::{AgentEvent, AgentEventKind, AgentIdentity, AgentUsage};
+use forgetest_core::agent::{AgentEvent, AgentEventKind, AgentIdentity, AgentUsage, CostSource};
+use forgetest_core::pricing::{ModelPricing, PricingTable};
 use forgetest_core::repository_report::{
     Compatibility, ContainerLimitsManifest, ExecutionPolicyManifest, ExecutionPolicyParameters,
     FileChange, FileChangeKind, RepositoryReport, RepositorySuiteSummary, TrialResult, TrialStatus,
@@ -274,9 +275,8 @@ fn pairwise_bootstrap_is_task_paired_and_deterministic() {
     assert_eq!(first.aggregate.pairwise, second.aggregate.pairwise);
 }
 
-#[test]
-fn execution_policy_digest_covers_limits_and_images() {
-    let policy = ExecutionPolicyManifest {
+fn benchmark_policy() -> ExecutionPolicyManifest {
+    ExecutionPolicyManifest {
         schema_version: 1,
         profile: "benchmark".into(),
         agent_environment: "docker".into(),
@@ -308,10 +308,31 @@ fn execution_policy_digest_covers_limits_and_images() {
                 pids_limit: 128,
                 tmpfs_size: "256m".into(),
             }),
+            max_run_cost_usd: None,
+            pricing: None,
         },
         digest: String::new(),
     }
-    .sealed();
+    .sealed()
+}
+
+fn pricing_table() -> PricingTable {
+    PricingTable {
+        schema_version: 1,
+        retrieved_on: "2026-10-15".into(),
+        models: vec![ModelPricing {
+            model: "example-model-2026-01-01".into(),
+            input_usd_per_mtok: 1.0,
+            cache_read_usd_per_mtok: 0.1,
+            cache_write_usd_per_mtok: 1.25,
+            output_usd_per_mtok: 8.0,
+        }],
+    }
+}
+
+#[test]
+fn execution_policy_digest_covers_limits_and_images() {
+    let policy = benchmark_policy();
 
     assert!(policy.verify_digest());
     assert_eq!(policy.digest.len(), 64);
@@ -320,4 +341,207 @@ fn execution_policy_digest_covers_limits_and_images() {
     changed.parameters.max_agent_tokens = Some(100_001);
     assert!(!changed.verify_digest());
     assert_ne!(changed.sealed().digest, policy.digest);
+}
+
+/// Digest of `benchmark_policy()` computed before pricing and the run cost
+/// cap existed (baseline c3b8f9a). Benchmark locks record this value.
+const PRE_PRICING_POLICY_DIGEST: &str =
+    "a4041e082953c80e170e02c35c567e1fd1fd57fbcddcfa33a1d1dfa4ebe8d771";
+
+#[test]
+fn execution_policy_digest_is_unchanged_when_new_options_are_unused() {
+    let policy = benchmark_policy();
+    let parameters = serde_json::to_value(&policy.parameters).unwrap();
+
+    assert_eq!(policy.digest, PRE_PRICING_POLICY_DIGEST);
+    assert!(parameters.get("max_run_cost_usd").is_none());
+    assert!(parameters.get("pricing").is_none());
+
+    let mut capped = policy.clone();
+    capped.parameters.max_run_cost_usd = Some(5.0);
+    let capped = capped.sealed();
+    let mut priced = policy.clone();
+    priced.parameters.pricing = Some(pricing_table());
+    let priced = priced.sealed();
+    assert_ne!(capped.digest, PRE_PRICING_POLICY_DIGEST);
+    assert_ne!(priced.digest, PRE_PRICING_POLICY_DIGEST);
+    assert_ne!(capped.digest, priced.digest);
+
+    let mut repriced = priced.clone();
+    repriced.parameters.pricing.as_mut().unwrap().models[0].output_usd_per_mtok = 9.0;
+    assert!(!repriced.verify_digest());
+}
+
+#[test]
+fn committed_v2_reports_load_and_reserialize_byte_for_byte() {
+    for path in [
+        "../../examples/reports/repository-local/report.json",
+        "../../examples/reports/repository-docker/report.json",
+    ] {
+        // Windows checkouts may convert the committed LF endings to CRLF.
+        let original = std::fs::read_to_string(path).unwrap().replace("\r\n", "\n");
+        let report = RepositoryReport::load_json(std::path::Path::new(path)).unwrap();
+
+        assert!(report.policy.verify_digest());
+        assert!(report.policy.parameters.pricing.is_none());
+        assert!(report
+            .aggregate
+            .per_agent
+            .values()
+            .all(|stats| stats.cost_unavailable_trials.is_none()));
+        assert_eq!(serde_json::to_string_pretty(&report).unwrap(), original);
+    }
+}
+
+fn costed_trial(task: &str, index: u32, cost: f64, source: Option<CostSource>) -> TrialResult {
+    let mut trial = trial(task, index, TrialStatus::Passed);
+    trial.usage = AgentUsage {
+        input_tokens: 100,
+        output_tokens: 10,
+        estimated_cost_usd: cost,
+        cost_source: source,
+        ..AgentUsage::default()
+    };
+    trial
+}
+
+#[test]
+fn aggregate_excludes_unavailable_cost_and_counts_it() {
+    let report = report(vec![
+        costed_trial("a", 1, 1.0, Some(CostSource::Vendor)),
+        costed_trial("a", 2, 0.5, Some(CostSource::PricingTable)),
+        costed_trial("b", 1, 9.0, Some(CostSource::Unavailable)),
+        costed_trial("b", 2, 0.25, None),
+    ]);
+
+    let stats = &report.aggregate.per_agent["scripted/deterministic@1#agent-policy"];
+    assert_eq!(stats.total_cost_usd, 1.75);
+    assert_eq!(stats.cost_unavailable_trials, Some(1));
+    let json = serde_json::to_value(&report.trials[2].usage).unwrap();
+    assert_eq!(json["cost_source"], "unavailable");
+    assert_eq!(
+        serde_json::to_value(&report.trials[1].usage).unwrap()["cost_source"],
+        "pricing-table"
+    );
+
+    let legacy = report_without_cost_sources();
+    let stats = &legacy.aggregate.per_agent["scripted/deterministic@1#agent-policy"];
+    assert_eq!(stats.total_cost_usd, 0.75);
+    assert_eq!(stats.cost_unavailable_trials, None);
+    let json = serde_json::to_value(stats).unwrap();
+    assert!(json.get("cost_unavailable_trials").is_none());
+    let usage = serde_json::to_value(&legacy.trials[0].usage).unwrap();
+    assert!(usage.get("cost_source").is_none());
+    assert!(usage.get("cache_write_tokens").is_none());
+    assert!(usage.get("reasoning_tokens").is_none());
+}
+
+fn report_without_cost_sources() -> RepositoryReport {
+    report(vec![
+        costed_trial("a", 1, 0.5, None),
+        costed_trial("a", 2, 0.25, None),
+    ])
+}
+
+#[test]
+fn report_v2_loader_recomputes_unavailable_cost_count() {
+    let mut report = report(vec![
+        costed_trial("a", 1, 1.0, Some(CostSource::Vendor)),
+        costed_trial("a", 2, 0.0, Some(CostSource::Unavailable)),
+    ]);
+    report.policy = report.policy.sealed();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("report.json");
+    report.save_json(&path).unwrap();
+    assert!(RepositoryReport::load_json(&path).is_ok());
+
+    let mut value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    value["aggregate"]["per_agent"]["scripted/deterministic@1#agent-policy"]
+        ["cost_unavailable_trials"] = serde_json::json!(0);
+    std::fs::write(&path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+
+    let error = RepositoryReport::load_json(&path).unwrap_err();
+    assert!(error.to_string().contains("aggregate"));
+}
+
+#[test]
+fn report_with_inline_pricing_round_trips_and_rejects_invalid_prices() {
+    let mut report = report(vec![priced_trial()]);
+    report.policy.parameters.pricing = Some(pricing_table());
+    report.policy.parameters.max_run_cost_usd = Some(2.5);
+    report.policy = report.policy.sealed();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("report.json");
+    report.save_json(&path).unwrap();
+
+    let loaded = RepositoryReport::load_json(&path).unwrap();
+    assert!(loaded.policy.verify_digest());
+    assert_eq!(loaded.policy.parameters.pricing, Some(pricing_table()));
+    assert_eq!(loaded.policy.parameters.max_run_cost_usd, Some(2.5));
+
+    let mut invalid = report.clone();
+    invalid.policy.parameters.pricing.as_mut().unwrap().models[0].input_usd_per_mtok = -1.0;
+    invalid.policy = invalid.policy.sealed();
+    let error = invalid
+        .save_json(&directory.path().join("invalid.json"))
+        .unwrap_err();
+    assert!(format!("{error:#}").contains("pricing"));
+}
+
+fn priced_trial() -> TrialResult {
+    let mut trial = trial_for_agent(
+        "a",
+        1,
+        TrialStatus::Passed,
+        "codex",
+        "example-model-2026-01-01",
+        "agent-policy",
+    );
+    trial.usage = AgentUsage {
+        input_tokens: 100,
+        output_tokens: 10,
+        estimated_cost_usd: 0.001,
+        cost_source: Some(CostSource::PricingTable),
+        ..AgentUsage::default()
+    };
+    trial
+}
+
+#[test]
+fn report_rejects_pricing_table_cost_without_a_matching_policy_entry() {
+    let mut unpriced = report(vec![priced_trial()]);
+    unpriced.policy = unpriced.policy.sealed();
+    let error = unpriced.validate_integrity().unwrap_err();
+    assert!(error.to_string().contains("pricing table"), "{error:#}");
+
+    let mut other_model = report(vec![priced_trial()]);
+    let mut table = pricing_table();
+    table.models[0].model = "example-model-2026-02-01".into();
+    other_model.policy.parameters.pricing = Some(table);
+    other_model.policy = other_model.policy.sealed();
+    assert!(other_model.validate_integrity().is_err());
+
+    let mut priced = report(vec![priced_trial()]);
+    priced.policy.parameters.pricing = Some(pricing_table());
+    priced.policy = priced.policy.sealed();
+    priced.validate_integrity().unwrap();
+}
+
+#[test]
+fn report_loader_rejects_non_positive_or_non_finite_run_cap() {
+    for cap in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+        let mut report = report(vec![trial("a", 1, TrialStatus::Passed)]);
+        report.policy.parameters.max_run_cost_usd = Some(cap);
+        report.policy = report.policy.sealed();
+        assert!(report.validate_integrity().is_err(), "cap {cap} validated");
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("report.json");
+        std::fs::write(&path, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
+        assert!(
+            RepositoryReport::load_json(&path).is_err(),
+            "cap {cap} loaded"
+        );
+    }
 }

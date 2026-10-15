@@ -9,6 +9,7 @@ pub mod error;
 pub mod harbor;
 pub mod model;
 pub mod parser;
+pub mod pricing;
 pub mod report;
 pub mod repository_engine;
 pub mod repository_report;

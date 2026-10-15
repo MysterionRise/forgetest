@@ -6,7 +6,7 @@ use anyhow::Result;
 use std::path::Path;
 
 use forgetest_core::report::EvalReport;
-use forgetest_core::repository_report::{RepositoryReport, TrialStatus};
+use forgetest_core::repository_report::{AgentAggregate, RepositoryReport, TrialStatus};
 
 /// Escape a string for safe HTML insertion.
 fn html_escape(s: &str) -> String {
@@ -182,6 +182,20 @@ pub fn generate_repository_html(report: &RepositoryReport) -> String {
             .unwrap_or("not recorded"),
     );
     evidence_term(&mut html, "Verifier network", &report.policy.network);
+    if let Some(cap) = report.policy.parameters.max_run_cost_usd {
+        evidence_term(&mut html, "Run cost cap", &format!("USD {cap:.4}"));
+    }
+    if let Some(pricing) = &report.policy.parameters.pricing {
+        evidence_term(
+            &mut html,
+            "Pricing table",
+            &format!(
+                "{} exact model IDs, retrieved {}",
+                pricing.models.len(),
+                pricing.retrieved_on
+            ),
+        );
+    }
     evidence_term(
         &mut html,
         "Publication status",
@@ -191,13 +205,32 @@ pub fn generate_repository_html(report: &RepositoryReport) -> String {
             "private raw artifact"
         },
     );
-    html.push_str("</dl>\n</section>\n");
+    html.push_str("</dl>\n");
+    if let Some(pricing) = &report.policy.parameters.pricing {
+        html.push_str(&format!(
+            "<h3>Pricing table (USD per million tokens, retrieved {})</h3>\n",
+            html_escape(&pricing.retrieved_on)
+        ));
+        html.push_str("<table><thead><tr><th>Model</th><th>Input</th><th>Cache read</th><th>Cache write</th><th>Output</th></tr></thead><tbody>\n");
+        for entry in &pricing.models {
+            html.push_str(&format!(
+                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
+                html_escape(&entry.model),
+                entry.input_usd_per_mtok,
+                entry.cache_read_usd_per_mtok,
+                entry.cache_write_usd_per_mtok,
+                entry.output_usd_per_mtok,
+            ));
+        }
+        html.push_str("</tbody></table>\n");
+    }
+    html.push_str("</section>\n");
 
     html.push_str("<section>\n<h2>Reliability</h2>\n");
     html.push_str("<table><thead><tr><th>Agent</th><th>Resolved</th><th>Observed rate</th><th>95% CI</th><th>Pass@1</th><th>Pass^3</th><th>Infrastructure errors</th><th>Cost</th></tr></thead><tbody>\n");
     for (agent, stats) in &report.aggregate.per_agent {
         html.push_str(&format!(
-            "<tr><td>{}</td><td>{}/{}</td><td>{:.1}%</td><td>{:.1}% to {:.1}%</td><td>{:.1}%</td><td>{:.1}%</td><td>{}</td><td>${:.4}</td></tr>\n",
+            "<tr><td>{}</td><td>{}/{}</td><td>{:.1}%</td><td>{:.1}% to {:.1}%</td><td>{:.1}%</td><td>{:.1}%</td><td>{}</td><td>{}</td></tr>\n",
             html_escape(agent),
             stats.passed,
             stats.scheduled,
@@ -207,7 +240,7 @@ pub fn generate_repository_html(report: &RepositoryReport) -> String {
             stats.pass_at_1 * 100.0,
             stats.pass_power_3 * 100.0,
             stats.infrastructure_errors,
-            stats.total_cost_usd,
+            cost_cell(stats),
         ));
     }
     html.push_str("</tbody></table>\n</section>\n");
@@ -314,6 +347,23 @@ pub fn write_repository_html_report(report: &RepositoryReport, path: &Path) -> R
     }
     std::fs::write(path, generate_repository_html(report))?;
     Ok(())
+}
+
+/// Aggregate cost with unavailable trials called out. Cancelled trials never
+/// ran, so an agent whose every started trial is unavailable has no cost.
+fn cost_cell(stats: &AgentAggregate) -> String {
+    match stats.cost_unavailable_trials {
+        Some(unavailable)
+            if unavailable > 0
+                && unavailable >= stats.scheduled.saturating_sub(stats.cancelled) =>
+        {
+            "unavailable".into()
+        }
+        Some(unavailable) if unavailable > 0 => {
+            format!("${:.4} ({unavailable} unavailable)", stats.total_cost_usd)
+        }
+        _ => format!("${:.4}", stats.total_cost_usd),
+    }
 }
 
 fn evidence_term(html: &mut String, label: &str, value: &str) {
