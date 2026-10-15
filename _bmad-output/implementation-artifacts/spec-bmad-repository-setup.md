@@ -2,7 +2,7 @@
 title: 'Finish repository-wide BMAD setup'
 type: 'chore'
 created: '2026-08-15'
-status: 'done'
+status: 'in-review'
 baseline_commit: '88385f60adb116a04fc3834152c6d40f7b8fb916'
 review_loop_iteration: 0
 context:
@@ -95,7 +95,7 @@ internal contract identifiers outside `docs/gangsta/`.
 
 ## Spec Change Log
 
-- 2026-10-15: WP-014 closed.
+- 2026-10-15: WP-014 gates pass.
   - `spec-h2-rustsec-2026-0258` (Don-approved, amended) remediated
     RUSTSEC-2026-0258 and the later quinn-proto and rustls advisories with
     lockfile-only updates.
@@ -106,6 +106,11 @@ internal contract identifiers outside `docs/gangsta/`.
     BMAD governance gate, `cargo audit`, Docker proof and the Windows,
     macOS and ARM64 jobs. Protected studies and product sources are
     unchanged.
+  - Operational status stays `in-review`. The harness assertion
+    `durable-evidence-remains-blocked` in
+    `scripts/fixtures/bmad/runtime-tests.sh` and the package-audit
+    evidence in `docs/gangsta/` still record the blocked state. Moving
+    to done requires a Don-reviewed update of both.
 
 ## Design Notes
 
