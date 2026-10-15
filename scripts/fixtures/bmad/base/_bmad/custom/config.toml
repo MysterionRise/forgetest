@@ -1,0 +1,7 @@
+# Synthetic human-owned team override used by verifier fixtures.
+[core]
+user_name = "Fixture Contributor"
+communication_language = "English"
+
+[modules.bmm]
+user_skill_level = "expert"

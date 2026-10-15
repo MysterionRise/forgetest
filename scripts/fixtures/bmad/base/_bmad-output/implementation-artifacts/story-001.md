@@ -1,0 +1,1 @@
+# Synthetic approved story fixture

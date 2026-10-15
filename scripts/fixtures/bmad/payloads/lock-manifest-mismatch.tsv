@@ -1,0 +1,7 @@
+replace	_bmad/_config/manifest.yaml	version: 6.11.0 # bmm-module	version: 6.10.0 # bmm-module
+rehash	_bmad/_config/manifest.yaml	6c5ef5a278188c1ad993a63932d4915410affeb639b6ca414c3aabef984d7f3e	-
+replace	bmad.lock.json	"raw_promotion_sha256": "4f4cccfe04bbe367f792df565a90d62eb0aff04f24b9e92a2b23535badf1700b"	"raw_promotion_sha256": "e017e98aa4a42a9a5155a787a7282135d5ac29d2437c9f318c68ef4f5e158d3a"
+replace	bmad.lock.json	"first_raw_promotion_sha256": "4f4cccfe04bbe367f792df565a90d62eb0aff04f24b9e92a2b23535badf1700b"	"first_raw_promotion_sha256": "e017e98aa4a42a9a5155a787a7282135d5ac29d2437c9f318c68ef4f5e158d3a"
+replace	bmad.lock.json	"second_raw_promotion_sha256": "4f4cccfe04bbe367f792df565a90d62eb0aff04f24b9e92a2b23535badf1700b"	"second_raw_promotion_sha256": "e017e98aa4a42a9a5155a787a7282135d5ac29d2437c9f318c68ef4f5e158d3a"
+replace	bmad.lock.json	"source_raw_generated_tree_sha256": "4f4cccfe04bbe367f792df565a90d62eb0aff04f24b9e92a2b23535badf1700b"	"source_raw_generated_tree_sha256": "e017e98aa4a42a9a5155a787a7282135d5ac29d2437c9f318c68ef4f5e158d3a"
+replace	bmad.lock.json	"promoted_raw_generated_tree_sha256": "4f4cccfe04bbe367f792df565a90d62eb0aff04f24b9e92a2b23535badf1700b"	"promoted_raw_generated_tree_sha256": "e017e98aa4a42a9a5155a787a7282135d5ac29d2437c9f318c68ef4f5e158d3a"

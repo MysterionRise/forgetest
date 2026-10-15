@@ -1,0 +1,2 @@
+replace	_bmad-output/index.yaml	"artifact_type":"plan"	"artifact_type":"research"
+replace	_bmad-output/index.yaml	"artifact_type": "story"	"artifact_type": "epic"

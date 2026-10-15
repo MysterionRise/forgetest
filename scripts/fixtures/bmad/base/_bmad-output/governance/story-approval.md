@@ -1,0 +1,1 @@
+# Synthetic story approval evidence

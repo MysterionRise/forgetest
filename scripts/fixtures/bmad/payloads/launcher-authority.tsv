@@ -1,0 +1,2 @@
+replace	AGENTS.md	"precedence": "repository-authorities-override-generated-bmad-guidance"	"precedence": "generated-guidance-overrides-repository-authorities"
+replace	CLAUDE.md	"precedence": "repository-authorities-override-generated-bmad-guidance"	"precedence": "generated-guidance-overrides-repository-authorities"

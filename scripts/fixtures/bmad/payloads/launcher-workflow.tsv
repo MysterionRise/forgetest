@@ -1,0 +1,3 @@
+replace	.claude/skills/bmad-build/SKILL.md	On success, read and follow	On success, resolve and follow
+rehash	.claude/skills/bmad-build/SKILL.md	bce4778d8d275095ca1836733337163c1bf11a5a62e6585b951de458a5ac2c8e	-
+replace-all	bmad.lock.json	4f4cccfe04bbe367f792df565a90d62eb0aff04f24b9e92a2b23535badf1700b	8f58784909aafa4ccd6436292e90a9106ebbe84fd8a34a33cd336946a8ed500f

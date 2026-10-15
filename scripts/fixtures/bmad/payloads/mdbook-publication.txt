@@ -1,0 +1,1 @@
+- [Internal BMAD fixture](../../_bmad-output/planning-artifacts/plan-001.md)

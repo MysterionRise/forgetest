@@ -1,0 +1,303 @@
+{
+  "approval_rules": {
+    "approver_must_be_active_and_scope_eligible": true,
+    "evidence_paths_are_repository_relative": true,
+    "evidence_targets_must_exist": true,
+    "independence_exception_absent_fields_must_be_null": true,
+    "independence_exception_requires_approved_at": true,
+    "independence_exception_requires_don": true,
+    "independence_exception_requires_evidence": true,
+    "independence_exception_requires_rationale": true,
+    "non_null_approver_is_authority_id": true,
+    "owner_is_authority_id": true,
+    "owner_must_differ_from_approver": true
+  },
+  "archive_rules": {
+    "archive_authorizer_is_authority_id": true,
+    "archive_authorizer_required": true,
+    "archive_authorizer_requires_same_scope_authority": true,
+    "archive_evidence_required": true,
+    "archived_at_required": true,
+    "archived_history_remains_indexed": true,
+    "original_approval_evidence_must_be_retained": true,
+    "original_approved_at_must_be_retained": true,
+    "original_approver_must_be_retained": true,
+    "prior_supersession_fields_must_be_retained": true
+  },
+  "artifacts": [
+    {
+      "approval_evidence": "docs/gangsta/bmad-repository-setup/specs/2026-08-14-contract.md",
+      "approved_at": "2026-08-29T12:15:33Z",
+      "approver": "repository-don-001",
+      "archive_authorizer": null,
+      "archive_evidence": null,
+      "archived_at": null,
+      "artifact_type": "plan",
+      "classification": "repository-visible",
+      "id": "spec-bmad-repository-setup",
+      "independence_exception_approved_at": "2026-08-29T12:15:33Z",
+      "independence_exception_approver": "repository-don-001",
+      "independence_exception_evidence": "docs/gangsta/bmad-repository-setup/specs/2026-08-14-contract.md",
+      "independence_exception_rationale": "The repository Don owns and explicitly approved this bootstrap plan; the signed contract preserves the approval basis.",
+      "owner": "repository-don-001",
+      "parent": null,
+      "path": "_bmad-output/implementation-artifacts/spec-bmad-repository-setup.md",
+      "scope": "repository/bmad-governance",
+      "status": "approved",
+      "superseded_at": null,
+      "superseded_by": null,
+      "supersedes": null,
+      "supersession_authorizer": null,
+      "supersession_evidence": null,
+      "title": "Finish repository-wide BMAD setup"
+    },
+    {
+      "approval_evidence": null,
+      "approved_at": null,
+      "approver": null,
+      "archive_authorizer": null,
+      "archive_evidence": null,
+      "archived_at": null,
+      "artifact_type": "plan",
+      "classification": "repository-visible",
+      "id": "deferred-work",
+      "independence_exception_approved_at": null,
+      "independence_exception_approver": null,
+      "independence_exception_evidence": null,
+      "independence_exception_rationale": null,
+      "owner": "repository-don-001",
+      "parent": null,
+      "path": "_bmad-output/implementation-artifacts/deferred-work.md",
+      "scope": "repository/bmad-governance/deferred-work",
+      "status": "draft",
+      "superseded_at": null,
+      "superseded_by": null,
+      "supersedes": null,
+      "supersession_authorizer": null,
+      "supersession_evidence": null,
+      "title": "Deferred work"
+    },
+    {
+      "approval_evidence": null,
+      "approved_at": null,
+      "approver": null,
+      "archive_authorizer": null,
+      "archive_evidence": null,
+      "archived_at": null,
+      "artifact_type": "plan",
+      "classification": "repository-visible",
+      "id": "bmad-artifact-workspace-compatibility",
+      "independence_exception_approved_at": null,
+      "independence_exception_approver": null,
+      "independence_exception_evidence": null,
+      "independence_exception_rationale": null,
+      "owner": "repository-don-001",
+      "parent": "spec-bmad-repository-setup",
+      "path": "_bmad-output/planning-artifacts/bmad-artifact-workspace-compatibility.md",
+      "scope": "repository/bmad-governance/artifact-workspaces",
+      "status": "draft",
+      "superseded_at": null,
+      "superseded_by": null,
+      "supersedes": null,
+      "supersession_authorizer": null,
+      "supersession_evidence": null,
+      "title": "Enable governed BMAD artifact workspaces"
+    }
+  ],
+  "authority_registry": "_bmad-output/authorities.yaml",
+  "canonical_roots": [
+    "_bmad-output/planning-artifacts",
+    "_bmad-output/implementation-artifacts"
+  ],
+  "effectiveness_rules": {
+    "effective_record_must_have_no_approved_successor": true,
+    "effective_status": "approved",
+    "key_fields": [
+      "artifact_type",
+      "scope"
+    ],
+    "maximum_effective_records_per_key": 1
+  },
+  "index_revision": 5,
+  "lifecycle_rules": {
+    "approved_null_fields": [
+      "superseded_by",
+      "supersession_authorizer",
+      "superseded_at",
+      "supersession_evidence",
+      "archive_authorizer",
+      "archived_at",
+      "archive_evidence"
+    ],
+    "approved_required_fields": [
+      "approver",
+      "approved_at",
+      "approval_evidence"
+    ],
+    "archived_record_requires_archive_authorization": true,
+    "archived_required_fields": [
+      "approver",
+      "approved_at",
+      "approval_evidence",
+      "archive_authorizer",
+      "archived_at",
+      "archive_evidence"
+    ],
+    "draft_null_fields": [
+      "approver",
+      "approved_at",
+      "approval_evidence",
+      "supersedes",
+      "superseded_by",
+      "supersession_authorizer",
+      "superseded_at",
+      "supersession_evidence",
+      "independence_exception_approver",
+      "independence_exception_approved_at",
+      "independence_exception_evidence",
+      "independence_exception_rationale",
+      "archive_authorizer",
+      "archived_at",
+      "archive_evidence"
+    ],
+    "original_approval_is_retained_after_transition": true,
+    "superseded_record_requires_successor": true,
+    "superseded_required_fields": [
+      "approver",
+      "approved_at",
+      "approval_evidence",
+      "superseded_by",
+      "supersession_authorizer",
+      "superseded_at",
+      "supersession_evidence"
+    ]
+  },
+  "ownership": "human-owned",
+  "parent_rules": {
+    "child_story_requires_parent": true,
+    "epic_parent_artifact_type": "plan",
+    "parent_scope_must_cover_child_scope": true,
+    "plans_epics_and_child_stories_may_coexist": true,
+    "referenced_parent_must_exist": true,
+    "story_parent_allowed_artifact_types": [
+      "epic",
+      "plan"
+    ]
+  },
+  "path_rules": {
+    "absolute_paths_forbidden": true,
+    "contained_in_canonical_roots": true,
+    "dot_segments_forbidden": true,
+    "duplicate_canonical_targets_forbidden": true,
+    "empty_segments_forbidden": true,
+    "filename_extension": ".md",
+    "filename_stem_must_equal_id": true,
+    "repeated_separators_forbidden": true,
+    "repository_relative": true,
+    "symlinks_forbidden": true,
+    "targets_must_exist": true,
+    "traversal_forbidden": true
+  },
+  "record_schema": {
+    "allowed_artifact_types": [
+      "plan",
+      "product-brief",
+      "prd",
+      "architecture",
+      "ux-design",
+      "research",
+      "retrospective",
+      "epic",
+      "story",
+      "trivial-exemption",
+      "urgent-security-incident",
+      "schema-migration"
+    ],
+    "allowed_classifications": [
+      "public",
+      "repository-visible"
+    ],
+    "allowed_statuses": [
+      "draft",
+      "approved",
+      "superseded",
+      "archived"
+    ],
+    "id_pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+    "ids_must_be_unique": true,
+    "ids_must_not_be_reused": true,
+    "null_encoding": "Use the JSON null literal exactly.",
+    "required_fields": [
+      "id",
+      "artifact_type",
+      "title",
+      "path",
+      "status",
+      "owner",
+      "approver",
+      "approved_at",
+      "approval_evidence",
+      "scope",
+      "parent",
+      "supersedes",
+      "superseded_by",
+      "supersession_authorizer",
+      "superseded_at",
+      "supersession_evidence",
+      "classification",
+      "independence_exception_approver",
+      "independence_exception_approved_at",
+      "independence_exception_evidence",
+      "independence_exception_rationale",
+      "archive_authorizer",
+      "archived_at",
+      "archive_evidence"
+    ],
+    "timestamp_format": "UTC RFC 3339 with a Z suffix",
+    "titles_must_be_non_empty": true
+  },
+  "schema_migration_rules": {
+    "migration_artifact_type": "schema-migration",
+    "migration_history_remains_indexed": true,
+    "migration_record_must_be_indexed": true,
+    "migration_record_must_name_previous_and_next_versions": true,
+    "migration_record_required_for_schema_change": true,
+    "migration_record_requires_eligible_approval": true
+  },
+  "schema_version": 1,
+  "special_record_rules": {
+    "trivial_exemption": {
+      "don_exception_requires_evidence": true,
+      "normal_approver_must_differ_from_owner": true,
+      "normal_approver_role": "repository-maintainer",
+      "required_content": [
+        "rationale"
+      ]
+    },
+    "urgent-security-incident": {
+      "allowed_approver_roles": [
+        "security-owner",
+        "Don"
+      ],
+      "required_content": [
+        "incident_scope",
+        "retrospective_deadline",
+        "retrospective_deadline_timezone",
+        "retrospective_deadline_rule"
+      ],
+      "retrospective_deadline_rule": "Next five Monday-through-Friday calendar days with no holiday exclusions.",
+      "retrospective_deadline_timezone": "Europe/London"
+    }
+  },
+  "supersession_rules": {
+    "links_must_be_bidirectional": true,
+    "predecessor_and_successor_must_share_artifact_type": true,
+    "predecessor_and_successor_must_share_scope": true,
+    "superseded_history_remains_indexed": true,
+    "supersession_authorization_is_distinct_from_successor_approval": true,
+    "supersession_authorizer_is_authority_id": true,
+    "supersession_authorizer_requires_affected_scope_authority": true,
+    "supersession_evidence_required": true,
+    "supersession_timestamp_required": true
+  }
+}

@@ -1,0 +1,32 @@
+lock-and-paths	lock-manifest-mismatch	batch	-	lock-manifest-mismatch.tsv	-	manifest
+lock-and-paths	generated-file-drift	append	_bmad/workflows/plan.md	generated-drift.txt	-	generated
+lock-and-paths	unsafe-absolute-path	replace	bmad.lock.json	          "_bmad/workflows/plan.md"	          "/tmp/synthetic-plan.md"	absolute
+lock-and-paths	unsafe-traversal-path	replace	bmad.lock.json	          "_bmad/workflows/plan.md"	          "../synthetic-plan.md"	traversal
+lock-and-paths	unsafe-symlink-path	symlink	_bmad/workflows/plan.md	../_config/manifest.yaml	-	symlink
+lock-and-paths	missing-generated-target	replace	bmad.lock.json	          "_bmad/workflows/plan.md"	          "_bmad/workflows/missing.md"	missing
+lock-and-paths	duplicate-canonical-target	replace	bmad.lock.json	          "_bmad/workflows/plan.md"	          "_bmad/./_config/manifest.yaml"	duplicate
+lock-and-paths	generated-human-overlap	replace	bmad.lock.json	          "_bmad/workflows/plan.md"	          "_bmad-output/project-context.md"	overlap
+authority-and-artifacts	authority-invalid-identity	replace	_bmad-output/authorities.yaml	"id": "don-1"	"id": ""	identity
+authority-and-artifacts	authority-invalid-role	replace	_bmad-output/authorities.yaml	"role":"repository-maintainer"	"role":"administrator"	role
+authority-and-artifacts	artifact-invalid-lifecycle	replace	_bmad-output/index.yaml	"status":"approved"	"status":"published"	lifecycle
+authority-and-artifacts	artifact-duplicate-effective	batch	-	duplicate-effective.tsv	-	effective
+authority-and-artifacts	artifact-missing-approval-evidence	replace	_bmad-output/index.yaml	"_bmad-output/governance/plan-approval.md"	null	approval evidence
+authority-and-artifacts	artifact-ineligible-approver	replace	_bmad-output/index.yaml	"approver":"maintainer-1"	"approver":"observer-1"	eligible
+authority-and-artifacts	artifact-owner-approver-conflict	replace	_bmad-output/index.yaml	"owner":"author-1"	"owner":"maintainer-1"	owner
+authority-and-artifacts	artifact-invalid-parent	replace	_bmad-output/index.yaml	"parent": "plan-001"	"parent": "missing-plan"	parent
+authority-and-artifacts	artifact-missing-archive-evidence	replace	_bmad-output/index.yaml	"status":"approved"	"status":"archived"	archive
+authority-and-artifacts	artifact-invalid-supersession	replace	_bmad-output/index.yaml	"supersedes":null	"supersedes":"missing-plan"	supersession
+authority-and-artifacts	artifact-invalid-classification	replace	_bmad-output/index.yaml	"classification":"repository-visible"	"classification":"confidential"	classification
+launchers-studies-publication	launcher-workflow-divergence	batch	-	launcher-workflow.tsv	-	workflow identity
+launchers-studies-publication	launcher-version-divergence	batch	-	launcher-version.tsv	-	module scope
+launchers-studies-publication	launcher-context-divergence	batch	-	launcher-context.tsv	-	context reference
+launchers-studies-publication	launcher-authority-divergence	batch	-	launcher-authority.tsv	-	authority precedence
+launchers-studies-publication	launcher-study-prohibition-divergence	batch	-	launcher-study-prohibition.tsv	-	protected-study policy
+launchers-studies-publication	study-v1-modification-instruction	append	_bmad-output/planning-artifacts/plan-001.md	study-v1-instruction.txt	-	protected study
+launchers-studies-publication	study-pilot-modification-instruction	append	_bmad-output/planning-artifacts/plan-001.md	study-pilot-instruction.txt	-	protected study
+launchers-studies-publication	study-future-protocol-modification-instruction	append	_bmad-output/planning-artifacts/plan-001.md	study-future-instruction.txt	-	protected study
+launchers-studies-publication	tracked-claude-state	create	.claude/settings.local.json	claude-state.json	-	Claude
+launchers-studies-publication	prohibited-sensitive-content	append	_bmad-output/planning-artifacts/plan-001.md	sensitive-marker.txt	-	sensitive
+launchers-studies-publication	accidental-mdbook-publication	batch	-	mdbook-publication-batch.tsv	-	publication
+context-and-ci-drift	stale-project-context	append	ARCHITECTURE.md	context-drift.txt	-	context
+context-and-ci-drift	ci-baseline-drift	batch	-	ci-baseline-drift.tsv	-	CI

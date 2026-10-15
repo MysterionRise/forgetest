@@ -1,0 +1,4 @@
+replace	_bmad-output/index.yaml	"status":"approved"	"status":"archived"
+replace	_bmad-output/index.yaml	"archive_authorizer":null	"archive_authorizer":"maintainer-1"
+replace	_bmad-output/index.yaml	"archived_at":null	"archived_at":"2026-08-14T09:00:00Z"
+replace	_bmad-output/index.yaml	"archive_evidence":null	"archive_evidence":"_bmad-output/governance/plan-approval.md"

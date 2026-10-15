@@ -1,0 +1,52 @@
+---
+schema_version: 1
+ownership: human-owned
+locked_baseline_revision: "3333333333333333333333333333333333333333"
+review:
+  reviewed_at: "2026-08-29T12:15:33Z"
+  reviewer_identity: don-1
+  reviewer_identity_type: repository-local-alias
+  reviewer_role: Don
+  approval_basis: Don-approved 2026-08-29 BMAD repository setup specification review
+source_identities:
+  Cargo.toml: 89472ce5bbd24c821a81548a24e34ec7a8b6ff3650cbab406267fc3bee93783b
+  ARCHITECTURE.md: ea7aa694921db0fcda394c8c5f3840a210884b0e6ea6e2ee62a47352ad2d82b3
+  SECURITY.md: e5e8b710741c4225fee40902d765b1546bdc0bde6eff1f5b336f5bf45f41d42d
+  studies/rust-agent-v1/README.md: cbe5c078a2fcb8072836105a7d96ddd2dba412db5174c5801b55eb7f98b3d5cc
+  studies/rust-agent-pilot/README.md: 09af8043ebac24edca8640a8f0514896a58fc2516f909a8f0bfbb7073e913100
+  docs/book.toml: 81b55eb120d52b6251b0ab329ab88eae3e0f6f4b9e80e1ffe4fec6d249ac6ad0
+  docs/src/SUMMARY.md: fbc5efaf82b8298a7cc6eacfdaec2d2fabcb8b3a4bd552cab9a8d8f2148b0b87
+  .github/workflows/ci.yml: 4b33d3f953ed8edb016cd61f5597f3cc162bbdd9b99a0a564cbb815c5caa2671
+protected_study_tree_identities:
+  algorithm: sha256-normalized-file-manifest-v1
+  roots:
+    studies/rust-agent-v1:
+      file_count: 2
+      tree_sha256: 69de8411457056db4c63e67b0854956bed96bd8f79a659a88f9c433495025f49
+    studies/rust-agent-pilot:
+      file_count: 1
+      tree_sha256: e692500d41b5d7bdd7c41622993ed83c9731546b71f917aefbccb93658d7ac2e
+    studies/future-protocol:
+      file_count: 1
+      tree_sha256: 30e29b7fd839757585063df7433a06dcf9345d3e5f0d0b0592938324b8c9064f
+ci_proof_contract:
+  workflow: .github/workflows/ci.yml
+  job_count: 1
+  step_count: 2
+  jobs:
+    - id: quality
+      name: fixture quality
+      steps:
+        - Build and verify Pages artifact
+        - Baseline follow-up
+---
+# Project context
+
+The recorded repository sources override generated BMAD guidance. The workspace,
+security policy, protected protocols, public documentation, and CI proof contract
+remain authoritative. Current and future frozen, locked, or pre-registered
+studies cannot be changed in place and are never scratch space.
+
+BMAD launcher rendering requires `uv` and follows the renderer's PEP 723
+`requires-python = ">=3.11"` declaration. The repository BMAD verifier is
+separate and requires Python >=3.10.

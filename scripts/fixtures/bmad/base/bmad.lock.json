@@ -1,0 +1,337 @@
+{
+  "schema_version": 1,
+  "installer": {
+    "package": "bmad-method",
+    "version": "6.11.0",
+    "registry": "https://registry.npmjs.org",
+    "tarball": "https://registry.npmjs.org/bmad-method/-/bmad-method-6.11.0.tgz",
+    "integrity": "sha512-HhnRRbnkX6Q0BlVQaVi0xoDTLnL6G1+qK3DHdw6oQQLM1yf2kLLrbjtzZHMi7vUWxsyeFsJtm8aJg+3WETGhow==",
+    "tarball_sha512": "1e19d145b9e45fa4340655506958b4c680d32e72fa1b5faa2b70c7770ea84102ccd727f690b2eb6e3b73647322eef516c6cc9e16c26d9bc68983edd61131a1a3",
+    "registry_shasum_sha1": "1111111111111111111111111111111111111111",
+    "registry_signature_keyid": "SHA256:SYNTHETIC-FIXTURE-KEY",
+    "registry_attestation": "https://registry.npmjs.org/-/npm/v1/attestations/bmad-method@6.11.0",
+    "file_count": 8,
+    "unpacked_size_bytes": 4096,
+    "license": "MIT",
+    "entry_point": "tools/installer/bmad-cli.js",
+    "executables": {
+      "bmad": "tools/installer/bmad-cli.js",
+      "bmad-method": "tools/installer/bmad-cli.js"
+    },
+    "node_requirement": ">=20.12.0",
+    "lifecycle": {
+      "preinstall": null,
+      "install": null,
+      "postinstall": null,
+      "prepare": "synthetic declared prepare script"
+    }
+  },
+  "runtime": {
+    "node": "20.12.2",
+    "npm": "10.5.0"
+  },
+  "platform": {
+    "os": "linux",
+    "os_version": "synthetic-1",
+    "architecture": "x86_64"
+  },
+  "scope": {
+    "modules": ["bmm"],
+    "tools": ["codex", "claude-code"],
+    "output_root": "_bmad-output"
+  },
+  "baseline": {
+    "revision": "3333333333333333333333333333333333333333",
+    "ci": {
+      "workflow": ".github/workflows/ci.yml",
+      "workflow_sha256": "69e74d69345aa581a729689fee01da68e0928dae254d7dfdf24663dc47faa0a1",
+      "job_count": 1,
+      "step_count": 2,
+      "jobs": [
+        {
+          "id": "quality",
+          "name": "fixture quality",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "steps": [
+            {
+              "name": "Build and verify Pages artifact",
+              "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+            },
+            {
+              "name": "Baseline follow-up",
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "lockfile_version": 3,
+    "production_only": true,
+    "direct_count": 1,
+    "resolved_count": 1,
+    "resolution_problems": 0,
+    "install_script_packages": [],
+    "canonical_payload_sha512": "547e73712014a49714504369b66f394f43996b56b3e84592fa6e5e1811fb8dfd7c557dd3bc49450fb34703bf9f355f7a058c86bb8079e7cab81bedada1fbfd57",
+    "declared": {
+      "fixture-dependency": "1.0.0"
+    },
+    "nodes": [
+      {
+        "dependencies": {},
+        "integrity": "sha512-q5JnQdpcLomJfdPbyiico1KSDu2HhPB4gXUl0BPVSg9kbEBlBbuhP//c8YWScPZd39UDpWRRoTq7NzIxL+KM/g==",
+        "optional_dependencies": {},
+        "path": "node_modules/fixture-dependency",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "dependency_audit": {
+    "environment": "fresh-disposable-directory-outside-repository",
+    "lifecycle_scripts": "disabled",
+    "installer_executed": false,
+    "repository_mutated": false
+  },
+  "generation": {
+    "status": "verified-reproducible-sanitized-disposable-promotion",
+    "clone": {
+      "revision": "3333333333333333333333333333333333333333",
+      "clean_before_each_install": true,
+      "comparison_install_count": 2,
+      "tracked_modifications_after_each_install": 0
+    },
+    "source": {
+      "package": "bmad-method",
+      "version": "6.11.0",
+      "dependency_payload_sha512": "547e73712014a49714504369b66f394f43996b56b3e84592fa6e5e1811fb8dfd7c557dd3bc49450fb34703bf9f355f7a058c86bb8079e7cab81bedada1fbfd57",
+      "lifecycle_scripts_during_dependency_resolution": "disabled",
+      "package_selector": "none-local-entry-point"
+    },
+    "command": {
+      "entry_point": "tools/installer/bmad-cli.js",
+      "modules": ["bmm"],
+      "tools": ["codex", "claude-code"],
+      "user_name": "Fixture Contributor",
+      "communication_language": "English",
+      "document_output_language": "English",
+      "output_root": "_bmad-output",
+      "project_name": "fixture",
+      "user_skill_level": "expert",
+      "planning_artifacts": "_bmad-output/planning-artifacts",
+      "implementation_artifacts": "_bmad-output/implementation-artifacts",
+      "project_knowledge": "_bmad-output/project-knowledge",
+      "non_interactive": true,
+      "npm_update_lookup": "forced-offline"
+    },
+    "environment": {
+      "node": "20.12.2",
+      "npm": "10.5.0",
+      "os": "linux",
+      "os_version": "synthetic-1",
+      "architecture": "x86_64",
+      "location": "fresh-disposable-baseline-clone"
+    },
+    "result": {
+      "exit_codes": [0, 0],
+      "installed_modules": ["core", "bmm"],
+      "installed_tools": ["codex", "claude-code"],
+      "skills_per_launcher": 1,
+      "files_per_launcher": 1,
+      "launcher_parity": true,
+      "launcher_roots": {
+        "codex": ".agents/skills",
+        "claude-code": ".claude/skills"
+      },
+      "launcher_tree_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+      "generated_path_rules": [
+        "_bmad/** except _bmad/custom/config.toml and local *.user.toml",
+        ".agents/skills/bmad-*/**",
+        ".claude/skills/bmad-*/**"
+      ],
+      "human_owned_output_root": "_bmad-output",
+      "unexpected_roots": []
+    },
+    "reproducibility": {
+      "install_count": 2,
+      "path_sets_match": true,
+      "first_raw_promotion_sha256": "4f4cccfe04bbe367f792df565a90d62eb0aff04f24b9e92a2b23535badf1700b",
+      "second_raw_promotion_sha256": "4f4cccfe04bbe367f792df565a90d62eb0aff04f24b9e92a2b23535badf1700b",
+      "raw_differing_files": [],
+      "normalization": "synthetic fixture uses byte-identical comparison trees",
+      "normalized_values": [],
+      "normalized_value_count": 0,
+      "normalized_tree_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "normalized_file_hashes_match": true,
+      "no_other_byte_drift": true,
+      "human_owned_identity_matches": true
+    },
+    "inventory": {
+      "normalization": "synthetic production-shaped fixture inventory",
+      "digest": "SHA-256 of recursively key-sorted compact UTF-8 JSON plus LF containing generated_paths, generated_files_sha256, and an empty symlink list",
+      "path_count": 13,
+      "directory_count": 6,
+      "file_count": 7,
+      "generated_paths": [
+        ".agents/skills/bmad-build",
+        ".agents/skills/bmad-build/SKILL.md",
+        ".claude/skills/bmad-build",
+        ".claude/skills/bmad-build/SKILL.md",
+        "_bmad",
+        "_bmad/_config",
+        "_bmad/_config/files-manifest.csv",
+        "_bmad/_config/manifest.yaml",
+        "_bmad/_config/skill-manifest.csv",
+        "_bmad/custom",
+        "_bmad/custom/.gitignore",
+        "_bmad/workflows",
+          "_bmad/workflows/plan.md"
+      ],
+      "generated_files_sha256": {
+        ".agents/skills/bmad-build/SKILL.md": "bce4778d8d275095ca1836733337163c1bf11a5a62e6585b951de458a5ac2c8e",
+        ".claude/skills/bmad-build/SKILL.md": "bce4778d8d275095ca1836733337163c1bf11a5a62e6585b951de458a5ac2c8e",
+        "_bmad/_config/files-manifest.csv": "0dff5219b8a6ff61b1a1e9126b567e77036083972cf3f162dbdfc604cd74e137",
+        "_bmad/_config/manifest.yaml": "6c5ef5a278188c1ad993a63932d4915410affeb639b6ca414c3aabef984d7f3e",
+        "_bmad/_config/skill-manifest.csv": "bd3d43d6019ee29ce1fd95e973d60289f746751cfd187dd92f20347dcca19969",
+        "_bmad/custom/.gitignore": "973b03a33f142c22cf9b65be285bebadd85790b6b55be04637d2f8c716f58fab",
+        "_bmad/workflows/plan.md": "bfc0dec0bcaf14d73d44d8f7f9bb4cdefa497cabea027523dcfebe0aac29482e"
+      },
+      "path_set_sha256": "569cd620a5a1ac252ca3ee104e0897228c36b206c840a65de64c27b21dc4878a",
+      "raw_promotion_sha256": "4f4cccfe04bbe367f792df565a90d62eb0aff04f24b9e92a2b23535badf1700b",
+      "normalized_reproducibility_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "symlinks": [],
+      "special_files": [],
+      "absolute_paths": [],
+      "traversal_paths": [],
+      "duplicate_canonical_targets": [],
+      "empty_directories": [],
+      "excluded_container_directories": [
+        ".agents",
+        ".agents/skills",
+        ".claude",
+        ".claude/skills"
+      ],
+      "human_owned_files": [
+        {
+          "path": "_bmad/custom/config.toml",
+          "sha256": "4d20bef452c7eb2d438da45998708f3731f5aaf9d50da360ecc6679e7338aad4",
+          "ownership": "human-owned-team-override",
+          "generated_hash_excluded": true
+        }
+      ],
+      "human_owned_output_roots": [
+        {
+          "path": "_bmad-output",
+          "state_after_install": "empty",
+          "generated_path_excluded": true
+        }
+      ]
+    },
+    "raw_installer_inventory": {
+      "path_count": 15,
+      "directory_count": 7,
+      "file_count": 8,
+      "framework_files": 6,
+      "files_per_launcher": 1
+    },
+    "sanitized_filesystem_inventory": {
+      "directory_count": 6,
+      "file_count": 8,
+      "first_raw_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+      "path_count": 14,
+      "second_raw_sha256": "7777777777777777777777777777777777777777777777777777777777777777"
+    },
+    "safety_audit": {
+      "absolute_path_count": 0,
+      "credential_hit_count": 0,
+      "duplicate_portable_target_count": 0,
+      "machine_path_hit_count": 0,
+      "output_overlap_count": 0,
+      "special_file_count": 0,
+      "symlink_count": 0,
+      "traversal_path_count": 0
+    },
+    "promotion_sanitization": {
+      "excluded_transient_files": [],
+      "excluded_transient_reason": "synthetic fixture has no transient files",
+      "removed_empty_transient_directories": [],
+      "excluded_local_state_files": [
+        "_bmad/config.user.toml",
+        "_bmad/custom/config.user.toml"
+      ],
+      "excluded_local_state_reason": "personal state is excluded",
+      "team_override": {
+        "path": "_bmad/custom/config.toml",
+        "sha256": "4d20bef452c7eb2d438da45998708f3731f5aaf9d50da360ecc6679e7338aad4",
+        "settings": {
+          "core.user_name": "Fixture Contributor",
+          "core.communication_language": "English",
+          "modules.bmm.user_skill_level": "expert"
+        },
+        "classification": "human-owned"
+      },
+      "root_ignore_follow_up": "repository installation must ignore local BMAD state"
+    }
+  },
+  "repository_promotion": {
+    "status": "verified",
+    "method": "byte-for-byte-copy-from-accepted-sanitized-disposable-tree",
+    "installer_executed_in_repository": false,
+    "source_baseline_revision": "3333333333333333333333333333333333333333",
+    "working_baseline_revision": "3333333333333333333333333333333333333333",
+    "source_raw_generated_tree_sha256": "4f4cccfe04bbe367f792df565a90d62eb0aff04f24b9e92a2b23535badf1700b",
+    "promoted_raw_generated_tree_sha256": "4f4cccfe04bbe367f792df565a90d62eb0aff04f24b9e92a2b23535badf1700b",
+    "source_path_set_sha256": "569cd620a5a1ac252ca3ee104e0897228c36b206c840a65de64c27b21dc4878a",
+    "promoted_path_set_sha256": "569cd620a5a1ac252ca3ee104e0897228c36b206c840a65de64c27b21dc4878a",
+    "generated_file_count": 7,
+    "generated_file_hashes_match": true,
+    "accepted_generated_hashes_unchanged": true,
+    "human_owned_files": [
+      {
+        "path": "_bmad/custom/config.toml",
+        "sha256": "4d20bef452c7eb2d438da45998708f3731f5aaf9d50da360ecc6679e7338aad4",
+        "hash_matches": true
+      }
+    ],
+    "launchers": {
+      "codex": {
+        "root": ".agents/skills",
+        "skill_count": 1,
+        "file_count": 1
+      },
+      "claude-code": {
+        "root": ".claude/skills",
+        "skill_count": 1,
+        "file_count": 1
+      },
+      "parity": true,
+      "tree_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+    },
+    "tracked_allowlist_patterns": [
+      "_bmad/** except _bmad/config.user.toml, _bmad/custom/config.toml ownership, and *.user.toml local state",
+      ".agents/skills/bmad-*/**",
+      ".claude/skills/bmad-*/**"
+    ],
+    "excluded_files_absent": [
+      "_bmad/config.user.toml",
+      "_bmad/custom/config.user.toml",
+      "**/__pycache__/**",
+      "**/*.pyc"
+    ],
+    "pre_existing_claude_local_state_preserved": true,
+    "identifier_review": {
+      "gangsta_contract_identifier_matches": 0,
+      "upstream_generic_bmad_matches": 0,
+      "upstream_generic_values": [],
+      "disposition": "synthetic fixture contains no inherited identifiers"
+    },
+    "symlink_count": 0,
+    "special_file_count": 0
+  },
+  "version_policy": {
+    "locked": "6.11.0",
+    "patch_review_series": "6.11.x",
+    "automatic_updates": false,
+    "minor_or_major_update": "requires-new-approved-plan"
+  }
+}

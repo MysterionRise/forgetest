@@ -1,0 +1,2 @@
+append	docs/src/SUMMARY.md	mdbook-publication.txt	-
+rehash-context	docs/src/SUMMARY.md	fbc5efaf82b8298a7cc6eacfdaec2d2fabcb8b3a4bd552cab9a8d8f2148b0b87	-

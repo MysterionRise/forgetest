@@ -45,6 +45,62 @@ Not claimed:
 - Content identities and checksums are provenance evidence, not proof that two
   stochastic model calls will return the same output.
 
+## BMAD contributor workflow
+
+BMAD Method 6.11.0, with bundled core and BMM as the only selected optional
+module, is the default for planning and implementing qualifying future
+extensions. Start with the tool guidance for [Codex](AGENTS.md) or
+[Claude Code](CLAUDE.md), then read the
+[project context](_bmad-output/project-context.md). Human authority comes from
+the [authority registry](_bmad-output/authorities.yaml), and the
+[artifact index](_bmad-output/index.yaml) is canonical for lifecycle and
+approval. Durable work belongs in the
+[planning artifact directory](_bmad-output/planning-artifacts/README.md) or
+[implementation artifact directory](_bmad-output/implementation-artifacts/README.md).
+The exact installation is recorded in [the BMAD lock](bmad.lock.json).
+
+Apply workflow tiers in this order:
+
+1. Protected studies cannot be changed or used as scratch space; there is no
+   exemption.
+2. Urgent security work uses a temporary minimal incident record approved by an
+   eligible `security-owner` or `Don`. Its retrospective full-BMM artifact is due
+   by the recorded deadline: the next five Monday-through-Friday calendar days
+   in `Europe/London`, with no holiday exclusions, authoritative after validation.
+3. Features and behavioral, architectural, public-API, dependency,
+   security-sensitive, or cross-crate changes require full BMM planning.
+4. Typo-only, formatting-only, and mechanically generated-only changes may use
+   a trivial exemption only when no mandatory category applies. Record a
+   rationale and obtain independent approval from an eligible
+   `repository-maintainer`, unless the registry's Don explicitly approves and
+   evidences the exception.
+
+Classification is human-reviewed and limited to `public` or
+`repository-visible`; repository-visible is not a confidentiality boundary.
+`_bmad` and `_bmad-output` remain outside the public `docs/src` mdBook by
+default, so link to them from repository guidance without copying them into the
+public book.
+
+Never run the installer or regeneration in the working checkout. An exact
+stable patch update requires renewed provenance review, disposable clean-clone
+regeneration and comparison, generated-only promotion, human review, and full
+verification. Minor or major updates require a new approved plan, and updates
+must not overwrite human-owned configuration, governance, context, or durable
+artifacts.
+
+Run the [BMAD verification entry point](scripts/verify-bmad.sh) before completing
+BMAD-governed work:
+
+BMAD launcher rendering requires `uv` and follows the renderer's PEP 723
+`requires-python = ">=3.11"` declaration. The repository BMAD verifier is
+separate and requires Python >=3.10. To prove the tracked Codex `bmad-build`
+launcher renders in this configured workspace without installer or regeneration
+work, run `bash scripts/test-bmad-render.sh`.
+
+```bash
+bash scripts/verify-bmad.sh
+```
+
 ## Verified Proof Path
 
 [The evidence ledger](docs/src/evidence.md) links the publication-safe reports
