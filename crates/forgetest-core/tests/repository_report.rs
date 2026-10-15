@@ -378,7 +378,8 @@ fn committed_v2_reports_load_and_reserialize_byte_for_byte() {
         "../../examples/reports/repository-local/report.json",
         "../../examples/reports/repository-docker/report.json",
     ] {
-        let original = std::fs::read_to_string(path).unwrap();
+        // Windows checkouts may convert the committed LF endings to CRLF.
+        let original = std::fs::read_to_string(path).unwrap().replace("\r\n", "\n");
         let report = RepositoryReport::load_json(std::path::Path::new(path)).unwrap();
 
         assert!(report.policy.verify_digest());
