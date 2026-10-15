@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "ownership": "human-owned",
+  "registry_revision": 1,
+  "identity_schema": {
+    "allowed_identity_types": ["repository-local-alias"],
+    "allowed_statuses": ["active", "inactive"]
+  },
+  "registry_approval": {
+    "approved_on": "2026-08-14",
+    "approver": "don-1",
+    "approver_role": "Don",
+    "approved_registry_revision": 1,
+    "status": "approved",
+    "evidence": "_bmad-output/governance/authority-registry-approval.md",
+    "evidence_basis": "Synthetic repository-local approval for verifier fixtures.",
+    "evidence_sha256": "737ce61bd16ed9e23a0e0df9b6e6645731f7937c12a4113e8288367915a72b6f"
+  },
+  "identities": [
+    {
+      "id": "don-1",
+      "identity_type": "repository-local-alias",
+      "role": "Don",
+      "scopes": ["*"],
+      "status": "active",
+      "verified_human": true
+    },
+    {
+      "id": "maintainer-1",
+      "identity_type": "repository-local-alias",
+      "role":"repository-maintainer",
+      "scopes": ["repository"],
+      "status": "active",
+      "verified_human": true
+    },
+    {
+      "id": "author-1",
+      "identity_type": "repository-local-alias",
+      "role": "scoped-maintainer",
+      "scopes": ["repository"],
+      "status": "active",
+      "verified_human": true
+    },
+    {
+      "id": "observer-1",
+      "identity_type": "repository-local-alias",
+      "role": "scoped-maintainer",
+      "scopes": ["repository/documentation"],
+      "status": "active",
+      "verified_human": true
+    },
+    {
+      "id": "security-1",
+      "identity_type": "repository-local-alias",
+      "role": "security-owner",
+      "scopes": ["repository/security"],
+      "status": "active",
+      "verified_human": true
+    }
+  ],
+  "role_kinds": [
+    {
+      "artifact_approval_within_scope": true,
+      "independence_exception_approval": true,
+      "registry_change_approval": true,
+      "role": "Don",
+      "scope_eligibility": "universal",
+      "trivial_exemption_approval": true,
+      "urgent_security_approval": true
+    },
+    {
+      "artifact_approval_within_scope": true,
+      "independence_exception_approval": false,
+      "registry_change_approval": false,
+      "role": "repository-maintainer",
+      "scope_eligibility": "assigned-repository-scopes",
+      "trivial_exemption_approval": true,
+      "urgent_security_approval": false
+    },
+    {
+      "artifact_approval_within_scope": true,
+      "independence_exception_approval": false,
+      "registry_change_approval": false,
+      "role": "scoped-maintainer",
+      "scope_eligibility": "assigned-scopes",
+      "trivial_exemption_approval": false,
+      "urgent_security_approval": false
+    },
+    {
+      "artifact_approval_within_scope": true,
+      "independence_exception_approval": false,
+      "registry_change_approval": false,
+      "role": "security-owner",
+      "scope_eligibility": "assigned-security-scopes",
+      "trivial_exemption_approval": false,
+      "urgent_security_approval": true
+    }
+  ],
+  "scope_rules": {
+    "canonical_root": "repository",
+    "descendant_match_requires_segment_boundary": true,
+    "grant_matches_descendant_scopes": true,
+    "grant_matches_exact_scope": true,
+    "security_owner_grants_must_be_within_security_scope": true,
+    "security_scope_root": "repository/security",
+    "segment_pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+    "segment_separator": "/",
+    "universal_scope": "*",
+    "universal_scope_allowed_role": "Don",
+    "universal_scope_matches_all": true
+  },
+  "change_control": {
+    "approval_revision_must_equal_registry_revision": true,
+    "fresh_approval_evidence_digest_required": true,
+    "fresh_approval_evidence_required": true,
+    "fresh_don_approval_required": true,
+    "identities_must_represent_verified_humans": true,
+    "increment_registry_revision": true,
+    "stable_ids_must_not_be_reused": true
+  },
+  "information_boundary": {
+    "repository_visible_is_confidential": false,
+    "restricted_material_allowed_in_git": false
+  }
+}

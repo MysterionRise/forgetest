@@ -1,0 +1,26 @@
+name: fixture-ci
+jobs:
+  quality:
+    name: fixture quality
+    steps:
+      - name: Build and verify Pages artifact
+        run: |
+          bash scripts/test-build-pages.sh
+      # BMAD-GOVERNANCE-GATE:START
+      - name: Provision exact Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+
+      - name: Build fresh Pages output
+        run: bash scripts/build-pages.sh
+
+      - name: Verify BMAD governance
+        env:
+          BMAD_RENDERED_OUTPUT: target/pages
+        run: |
+          bash scripts/test-verify-bmad.sh
+          bash scripts/verify-bmad.sh
+      # BMAD-GOVERNANCE-GATE:END
+      - name: Baseline follow-up
+        run: echo fixture-complete

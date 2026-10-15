@@ -1,0 +1,6 @@
+replace	_bmad-output/index.yaml	"status":"approved"	"status":"superseded"
+replace	_bmad-output/index.yaml	"supersedes":null	"supersedes":"plan-001"
+replace	_bmad-output/index.yaml	"superseded_by":null	"superseded_by":"plan-001"
+replace	_bmad-output/index.yaml	"supersession_authorizer":null	"supersession_authorizer":"maintainer-1"
+replace	_bmad-output/index.yaml	"superseded_at":null	"superseded_at":"2026-08-14T12:00:00Z"
+replace	_bmad-output/index.yaml	"supersession_evidence":null	"supersession_evidence":"_bmad-output/governance/plan-approval.md"

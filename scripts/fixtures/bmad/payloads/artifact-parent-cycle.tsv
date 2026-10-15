@@ -1,0 +1,2 @@
+replace	_bmad-output/index.yaml	"scope": "repository/story-001"	"scope": "repository"
+replace	_bmad-output/index.yaml	"parent":null	"parent":"story-001"

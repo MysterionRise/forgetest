@@ -1,0 +1,4 @@
+replace	_bmad-output/index.yaml	"status": "draft"	"status": "approved"
+replace	_bmad-output/index.yaml	"approver": null	"approver": "maintainer-1"
+replace	_bmad-output/index.yaml	"approved_at": null	"approved_at": "2026-08-14T12:00:00Z"
+replace	_bmad-output/index.yaml	"approval_evidence": null	"approval_evidence": "_bmad-output/governance/plan-approval.md"

@@ -1,0 +1,1 @@
+# Synthetic draft plan fixture

@@ -1,0 +1,16 @@
+/.agents/*
+!/.agents/skills/
+/.agents/skills/*
+!/.agents/skills/bmad-*/
+!/.agents/skills/bmad-*/**
+/.claude/*
+!/.claude/skills/
+/.claude/skills/*
+!/.claude/skills/bmad-*/
+!/.claude/skills/bmad-*/**
+/.codex/
+/_bmad/config.user.toml
+/_bmad/custom/*.user.toml
+/_bmad/**/*.user.toml
+**/__pycache__/
+**/*.py[cod]
