@@ -2,7 +2,7 @@
 title: 'Remediate RUSTSEC-2026-0258 and October 2026 RustSec advisories with lockfile-only updates'
 type: 'chore'
 created: '2026-10-13'
-status: 'approved'
+status: 'done'
 baseline_commit: '88385f60adb116a04fc3834152c6d40f7b8fb916'
 context:
   - '{project-root}/_bmad-output/project-context.md'

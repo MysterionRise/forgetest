@@ -2,7 +2,7 @@
 title: 'Finish repository-wide BMAD setup'
 type: 'chore'
 created: '2026-08-15'
-status: 'in-review'
+status: 'done'
 baseline_commit: '88385f60adb116a04fc3834152c6d40f7b8fb916'
 review_loop_iteration: 0
 context:
@@ -94,6 +94,18 @@ internal contract identifiers outside `docs/gangsta/`.
   protected studies, and the public mdBook set are unchanged.
 
 ## Spec Change Log
+
+- 2026-10-15: WP-014 closed.
+  - `spec-h2-rustsec-2026-0258` (Don-approved, amended) remediated
+    RUSTSEC-2026-0258 and the later quinn-proto and rustls advisories with
+    lockfile-only updates.
+  - The CI gate's exact Python pin moved from 3.10.0, which has no
+    ubuntu-24.04 build, to 3.14.8. See
+    `docs/governance/decisions/2026-10-15-don-approval-ci-python-pin.md`.
+  - All seven checks of CI run 38719674660 passed on PR #52, including the
+    BMAD governance gate, `cargo audit`, Docker proof and the Windows,
+    macOS and ARM64 jobs. Protected studies and product sources are
+    unchanged.
 
 ## Design Notes
 
