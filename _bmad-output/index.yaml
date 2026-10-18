@@ -156,8 +156,8 @@
       "title": "Remediate RUSTSEC-2026-0258 and October 2026 RustSec advisories with lockfile-only updates"
     },
     {
-      "approval_evidence": "docs/governance/decisions/2026-10-15-don-approvals.md",
-      "approved_at": "2026-10-15T01:39:53Z",
+      "approval_evidence": "docs/governance/decisions/2026-10-18-don-decisions-months-1-2.md",
+      "approved_at": "2026-10-18T20:55:02Z",
       "approver": "repository-don-001",
       "archive_authorizer": null,
       "archive_evidence": null,
@@ -165,10 +165,10 @@
       "artifact_type": "plan",
       "classification": "repository-visible",
       "id": "forgetest-roadmap-2026-10",
-      "independence_exception_approved_at": "2026-10-15T01:39:53Z",
+      "independence_exception_approved_at": "2026-10-18T20:55:02Z",
       "independence_exception_approver": "repository-don-001",
-      "independence_exception_evidence": "docs/governance/decisions/2026-10-15-don-approvals.md",
-      "independence_exception_rationale": "The repository Don owns this artifact, is the only registered human authority, and explicitly approved it as written in the 2026-10-15 decision record.",
+      "independence_exception_evidence": "docs/governance/decisions/2026-10-18-don-decisions-months-1-2.md",
+      "independence_exception_rationale": "The repository Don owns this artifact, is the only registered human authority, and approved the 2026-10-18 amendment as recorded in the months 1-2 decision record.",
       "owner": "repository-don-001",
       "parent": null,
       "path": "_bmad-output/planning-artifacts/forgetest-roadmap-2026-10.md",
@@ -222,7 +222,7 @@
     ],
     "maximum_effective_records_per_key": 1
   },
-  "index_revision": 10,
+  "index_revision": 11,
   "lifecycle_rules": {
     "approved_null_fields": [
       "superseded_by",
