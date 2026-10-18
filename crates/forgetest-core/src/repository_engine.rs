@@ -8,13 +8,13 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use futures::{stream, StreamExt};
+use futures::stream::{FuturesUnordered, StreamExt};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::agent::{
     AgentEvent, AgentExecutor, AgentLimits, AgentRequest, AgentTerminationReason, AgentUsage,
-    EventSink, GradeCheckRequest, GradeRequest, Grader, WorkspaceEnvironment,
+    CostSource, EventSink, GradeCheckRequest, GradeRequest, Grader, WorkspaceEnvironment,
 };
 use crate::repository_report::{
     ExecutionPolicyManifest, ExecutionPolicyParameters, FileChange, FileChangeKind,
@@ -119,6 +119,7 @@ impl RepositoryEngine {
                 && policy.max_patch_bytes == self.config.max_patch_bytes,
             "execution policy parameters do not match repository engine configuration"
         );
+        self.config.policy.validate_cost_terms()?;
         anyhow::ensure!(!agents.is_empty(), "at least one agent is required");
         ensure_private_directory(&self.config.output_dir)?;
         ensure_private_directory(&self.config.output_dir.join("trials"))?;
@@ -126,30 +127,58 @@ impl RepositoryEngine {
         let start = Instant::now();
         let capacity = suite.tasks.len() * agents.len() * self.config.trials as usize;
         let mut jobs = Vec::with_capacity(capacity);
-        for agent in agents {
-            for task in &suite.tasks {
+        for (agent_index, agent) in agents.iter().enumerate() {
+            for (task_index, task) in suite.tasks.iter().enumerate() {
                 for trial_index in 1..=self.config.trials {
-                    let order = jobs.len();
-                    jobs.push((order, task, Arc::clone(&agent), trial_index));
+                    jobs.push(TrialJob {
+                        order: jobs.len(),
+                        agent_index,
+                        task_index,
+                        task,
+                        agent: Arc::clone(agent),
+                        trial_index,
+                    });
                 }
             }
         }
+        // `order` keeps the report in agent, task, trial order. Dispatch is
+        // round-robin instead, so a run the breaker truncates stays balanced
+        // across agents and tasks.
+        jobs.sort_by_key(|job| (job.trial_index, job.task_index, job.agent_index));
 
-        let mut completed = stream::iter(jobs)
-            .map(|(order, task, agent, trial_index)| async move {
-                (order, self.run_trial(task, agent, trial_index).await)
-            })
-            .buffer_unordered(self.config.parallelism);
+        // Dispatch jobs one at a time so the run cost breaker is checked
+        // before every trial starts. In-flight trials are never interrupted.
+        let mut pending = jobs.into_iter();
+        let mut running = FuturesUnordered::new();
+        let mut breaker = RunCostBreaker::new(self.config.policy.parameters.max_run_cost_usd);
         let mut ordered_results = Vec::with_capacity(capacity);
-        while let Some((order, result)) = completed.next().await {
-            self.persist_trial(&result)?;
-            ordered_results.push((order, result));
-            ordered_results.sort_by_key(|(order, _)| *order);
-            let partial = ordered_results
-                .iter()
-                .map(|(_, result)| result.clone())
-                .collect::<Vec<_>>();
-            self.persist_partial_report(suite, &partial, start.elapsed())?;
+        loop {
+            while running.len() < self.config.parallelism {
+                let Some(job) = pending.next() else {
+                    break;
+                };
+                if let Some(reason) = breaker.trip_reason() {
+                    let result = self.cancelled_trial(
+                        job.task,
+                        job.agent.as_ref(),
+                        job.trial_index,
+                        reason,
+                    )?;
+                    self.record_result(suite, &mut ordered_results, job.order, result, start)?;
+                    continue;
+                }
+                running.push(async move {
+                    (
+                        job.order,
+                        self.run_trial(job.task, job.agent, job.trial_index).await,
+                    )
+                });
+            }
+            let Some((order, result)) = running.next().await else {
+                break;
+            };
+            breaker.observe(&result);
+            self.record_result(suite, &mut ordered_results, order, result, start)?;
         }
         ordered_results.sort_by_key(|(order, _)| *order);
         let results = ordered_results
@@ -163,6 +192,66 @@ impl RepositoryEngine {
             results,
             start.elapsed().as_millis() as u64,
         ))
+    }
+
+    fn record_result(
+        &self,
+        suite: &ResolvedSuite,
+        ordered_results: &mut Vec<(usize, TrialResult)>,
+        order: usize,
+        result: TrialResult,
+        start: Instant,
+    ) -> Result<()> {
+        self.persist_trial(&result)?;
+        ordered_results.push((order, result));
+        ordered_results.sort_by_key(|(order, _)| *order);
+        let partial = ordered_results
+            .iter()
+            .map(|(_, result)| result.clone())
+            .collect::<Vec<_>>();
+        self.persist_partial_report(suite, &partial, start.elapsed())
+    }
+
+    /// Record a scheduled trial that the run cost breaker never started.
+    fn cancelled_trial(
+        &self,
+        task: &ResolvedRepositoryTask,
+        agent: &dyn AgentExecutor,
+        trial_index: u32,
+        reason: String,
+    ) -> Result<TrialResult> {
+        let id = Uuid::new_v4();
+        ensure_private_directory(&self.config.output_dir.join("trials").join(id.to_string()))?;
+        Ok(TrialResult {
+            id,
+            task_id: task.id.clone(),
+            task_digest: task.digest.clone(),
+            agent: agent.identity().clone(),
+            environment_digest: self.environment_digest(),
+            trial_index,
+            agent_attempts: 0,
+            status: TrialStatus::Cancelled,
+            changed_files: Vec::new(),
+            patch: String::new(),
+            grader: None,
+            events: Vec::new(),
+            usage: AgentUsage::default(),
+            duration_ms: 0,
+            termination_reason: None,
+            artifacts: BTreeMap::new(),
+            error: Some(reason),
+        })
+    }
+
+    fn environment_digest(&self) -> String {
+        sha256_bytes(
+            format!(
+                "{}\0{}",
+                self.environment.identity(),
+                self.config.policy.digest
+            )
+            .as_bytes(),
+        )
     }
 
     async fn run_trial(
@@ -183,14 +272,7 @@ impl RepositoryEngine {
             "trace".into(),
             relative_artifact(&self.config.output_dir, &trace_path),
         )]);
-        let environment_digest = sha256_bytes(
-            format!(
-                "{}\0{}",
-                self.environment.identity(),
-                self.config.policy.digest
-            )
-            .as_bytes(),
-        );
+        let environment_digest = self.environment_digest();
 
         let setup = (|| -> Result<(tempfile::TempDir, PathBuf, TreeSnapshot, JsonlEventSink)> {
             ensure_private_directory(&trial_dir)?;
@@ -235,6 +317,10 @@ impl RepositoryEngine {
             Duration::from_secs(task.timeout_secs.min(self.config.agent_limits.timeout_secs));
         let mut agent_attempts = 0;
         let mut prior_usage = AgentUsage::default();
+        let limits = &self.config.agent_limits;
+        let run_cost_capped = self.config.policy.parameters.max_run_cost_usd.is_some();
+        let mut prior_tokens_unknown = false;
+        let mut prior_cost_unknown = false;
         let execution = loop {
             let Some(remaining) = trial_agent_budget.checked_sub(trial_start.elapsed()) else {
                 break AgentExecution::Finished(Box::new(Ok(timeout_outcome(
@@ -251,17 +337,17 @@ impl RepositoryEngine {
                     "agent trial time budget was exhausted before another attempt",
                 ))));
             }
-            let mut attempt_limits = self.config.agent_limits.clone();
+            let mut attempt_limits = limits.clone();
             attempt_limits.timeout_secs = remaining_secs;
+            attempt_limits.run_cost_capped = run_cost_capped;
             if let Some(limit) = attempt_limits.max_tokens {
-                let consumed = prior_usage
-                    .input_tokens
-                    .saturating_add(prior_usage.output_tokens);
+                let consumed = prior_usage.budget_tokens();
                 let remaining_tokens = limit.saturating_sub(consumed);
                 if remaining_tokens == 0 {
                     break AgentExecution::Finished(Box::new(Ok(budget_outcome(
                         agent.identity().clone(),
                         prior_usage.clone(),
+                        AgentTerminationReason::BudgetExceeded,
                         "agent token budget was exhausted before another attempt",
                     ))));
                 }
@@ -273,6 +359,7 @@ impl RepositoryEngine {
                     break AgentExecution::Finished(Box::new(Ok(budget_outcome(
                         agent.identity().clone(),
                         prior_usage.clone(),
+                        AgentTerminationReason::BudgetExceeded,
                         "agent cost budget was exhausted before another attempt",
                     ))));
                 }
@@ -300,8 +387,18 @@ impl RepositoryEngine {
                     outcome
                 })));
             }
-            if let Ok(outcome) = &attempt {
-                merge_usage(&mut prior_usage, &outcome.usage);
+            match &attempt {
+                Ok(outcome) => {
+                    merge_usage(&mut prior_usage, &outcome.usage);
+                    prior_tokens_unknown |= !tokens_known(&outcome.usage);
+                    prior_cost_unknown |= !outcome.usage.cost_known();
+                }
+                // A failed attempt may have consumed tokens nobody reported.
+                Err(_) => {
+                    merge_usage(&mut prior_usage, &AgentUsage::unavailable());
+                    prior_tokens_unknown = true;
+                    prior_cost_unknown = true;
+                }
             }
             let reason = match &attempt {
                 Ok(outcome) => outcome
@@ -311,6 +408,23 @@ impl RepositoryEngine {
                     .to_string(),
                 Err(error) => error.root_cause().to_string(),
             };
+            // Unknown usage cannot be subtracted from a cap, so the trial stops
+            // instead of letting the next attempt exceed the cap unseen. The
+            // run cap only fails closed where the profile requires it.
+            if (limits.max_tokens.is_some() && prior_tokens_unknown)
+                || (limits.max_cost_usd.is_some() && prior_cost_unknown)
+                || (limits.require_enforceable_usage && run_cost_capped && prior_cost_unknown)
+            {
+                break AgentExecution::Finished(Box::new(Ok(budget_outcome(
+                    agent.identity().clone(),
+                    prior_usage.clone(),
+                    AgentTerminationReason::BudgetUnverifiable,
+                    &format!(
+                        "budget unverifiable: attempt {agent_attempts} did not report the \
+                         usage needed to retry within the configured caps: {reason}"
+                    ),
+                ))));
+            }
             let retry_event = AgentEvent {
                 sequence: 0,
                 timestamp: chrono::Utc::now(),
@@ -345,12 +459,23 @@ impl RepositoryEngine {
                     elapsed: trial_start.elapsed(),
                     artifacts,
                     events,
-                    evidence: FailureEvidence::default(),
+                    evidence: FailureEvidence {
+                        usage: prior_usage,
+                        ..FailureEvidence::default()
+                    },
                 },
             );
         }
         let AgentExecution::Finished(execution) = execution else {
             unreachable!("environment errors returned above")
+        };
+        let known_usage = match execution.as_ref() {
+            Ok(outcome) => outcome.usage.clone(),
+            Err(_) => {
+                let mut usage = prior_usage.clone();
+                merge_usage(&mut usage, &AgentUsage::unavailable());
+                usage
+            }
         };
 
         let after = match snapshot_tree(
@@ -373,7 +498,10 @@ impl RepositoryEngine {
                         elapsed: trial_start.elapsed(),
                         artifacts,
                         events,
-                        evidence: FailureEvidence::default(),
+                        evidence: FailureEvidence {
+                            usage: known_usage,
+                            ..FailureEvidence::default()
+                        },
                     },
                 )
             }
@@ -382,9 +510,9 @@ impl RepositoryEngine {
         {
             Ok(diff) => diff,
             Err(error) => {
-                let (identity, usage) = match execution.as_ref() {
-                    Ok(outcome) => (outcome.identity.clone(), outcome.usage.clone()),
-                    Err(_) => (agent.identity().clone(), prior_usage.clone()),
+                let identity = match execution.as_ref() {
+                    Ok(outcome) => outcome.identity.clone(),
+                    Err(_) => agent.identity().clone(),
                 };
                 return failure_trial(
                     task,
@@ -400,7 +528,7 @@ impl RepositoryEngine {
                         artifacts,
                         events,
                         evidence: FailureEvidence {
-                            usage,
+                            usage: known_usage,
                             termination_reason: Some(AgentTerminationReason::OutputLimit),
                             ..FailureEvidence::default()
                         },
@@ -423,7 +551,10 @@ impl RepositoryEngine {
                     elapsed: trial_start.elapsed(),
                     artifacts,
                     events,
-                    evidence: FailureEvidence::default(),
+                    evidence: FailureEvidence {
+                        usage: known_usage,
+                        ..FailureEvidence::default()
+                    },
                 },
             );
         }
@@ -448,7 +579,7 @@ impl RepositoryEngine {
                     patch,
                     grader: None,
                     events,
-                    usage: prior_usage,
+                    usage: known_usage,
                     duration_ms: trial_start.elapsed().as_millis() as u64,
                     termination_reason: None,
                     artifacts,
@@ -464,7 +595,8 @@ impl RepositoryEngine {
                 AgentTerminationReason::Completed
                 | AgentTerminationReason::ExitNonZero
                 | AgentTerminationReason::OutputLimit
-                | AgentTerminationReason::BudgetExceeded => TrialStatus::AgentError,
+                | AgentTerminationReason::BudgetExceeded
+                | AgentTerminationReason::BudgetUnverifiable => TrialStatus::AgentError,
             };
             return TrialResult {
                 id: trial_id,
@@ -675,11 +807,12 @@ fn timeout_outcome(
 fn budget_outcome(
     identity: crate::agent::AgentIdentity,
     usage: AgentUsage,
+    termination: AgentTerminationReason,
     message: &str,
 ) -> crate::agent::AgentOutcome {
     crate::agent::AgentOutcome {
         identity,
-        termination: AgentTerminationReason::BudgetExceeded,
+        termination,
         exit_code: None,
         duration_ms: 0,
         usage,
@@ -692,7 +825,87 @@ fn merge_usage(total: &mut AgentUsage, additional: &AgentUsage) {
     total.input_tokens = total.input_tokens.saturating_add(additional.input_tokens);
     total.output_tokens = total.output_tokens.saturating_add(additional.output_tokens);
     total.cached_tokens = total.cached_tokens.saturating_add(additional.cached_tokens);
+    total.cache_write_tokens = total
+        .cache_write_tokens
+        .saturating_add(additional.cache_write_tokens);
+    total.reasoning_tokens = total
+        .reasoning_tokens
+        .saturating_add(additional.reasoning_tokens);
     total.estimated_cost_usd += additional.estimated_cost_usd;
+    // The weakest source wins: one unknown attempt makes the total unknown.
+    total.cost_source = match (total.cost_source, additional.cost_source) {
+        (None, source) | (source, None) => source,
+        (Some(CostSource::Unavailable), _) | (_, Some(CostSource::Unavailable)) => {
+            Some(CostSource::Unavailable)
+        }
+        (Some(CostSource::PricingTable), _) | (_, Some(CostSource::PricingTable)) => {
+            Some(CostSource::PricingTable)
+        }
+        (Some(CostSource::Vendor), Some(CostSource::Vendor)) => Some(CostSource::Vendor),
+    };
+}
+
+/// Whether an attempt reported tokens a token cap can count. Adapters record
+/// no token counts unless input and output were both reported, and a real
+/// attempt never consumes zero tokens, so zero means unknown.
+fn tokens_known(usage: &AgentUsage) -> bool {
+    usage.budget_tokens() > 0
+}
+
+/// One scheduled task/agent/trial combination.
+struct TrialJob<'a> {
+    order: usize,
+    agent_index: usize,
+    task_index: usize,
+    task: &'a ResolvedRepositoryTask,
+    agent: Arc<dyn AgentExecutor>,
+    trial_index: u32,
+}
+
+/// Run-level cost breaker evaluated between trials, never during one.
+struct RunCostBreaker {
+    cap_usd: Option<f64>,
+    spent_usd: f64,
+    unverifiable: bool,
+}
+
+impl RunCostBreaker {
+    fn new(cap_usd: Option<f64>) -> Self {
+        Self {
+            cap_usd,
+            spent_usd: 0.0,
+            unverifiable: false,
+        }
+    }
+
+    fn observe(&mut self, trial: &TrialResult) {
+        // A trial that never started an agent attempt spent nothing.
+        if trial.agent_attempts == 0 {
+            return;
+        }
+        if trial.usage.cost_known() {
+            self.spent_usd += trial.usage.estimated_cost_usd;
+        } else {
+            self.unverifiable = true;
+        }
+    }
+
+    fn trip_reason(&self) -> Option<String> {
+        let cap = self.cap_usd?;
+        if self.spent_usd >= cap {
+            Some(format!(
+                "run cost cap reached: USD {:.4} spent of USD {cap:.4}; trial was not started",
+                self.spent_usd
+            ))
+        } else if self.unverifiable {
+            Some(
+                "run cost unverifiable: a finished trial has no known cost; trial was not started"
+                    .into(),
+            )
+        } else {
+            None
+        }
+    }
 }
 
 fn reset_workspace(source: &Path, destination: &Path) -> Result<()> {

@@ -5,14 +5,15 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use forgetest_agents::{
-    builtin_profile, doctor, doctor_container, doctor_verifier_container, BenchmarkLock,
-    CommandProfile, DirectWorkspaceEnvironment, DockerAgentConfig, DockerProcessAgent,
-    ProcessAgent,
+    builtin_profile, doctor, doctor_container, doctor_verifier_container, ensure_caps_enforceable,
+    BenchmarkLock, CommandProfile, DirectWorkspaceEnvironment, DockerAgentConfig,
+    DockerProcessAgent, ProcessAgent,
 };
 use forgetest_core::agent::{AgentExecutor, AgentIdentity, AgentLimits, Grader};
+use forgetest_core::pricing::PricingTable;
 use forgetest_core::repository_engine::{RepositoryEngine, RepositoryEngineConfig};
 use forgetest_core::repository_report::{
-    ContainerLimitsManifest, ExecutionPolicyManifest, ExecutionPolicyParameters,
+    ContainerLimitsManifest, ExecutionPolicyManifest, ExecutionPolicyParameters, TrialStatus,
 };
 use forgetest_core::suite::load_suite;
 use forgetest_providers::config::{load_config_from, ForgetestConfig, RunnerType};
@@ -28,6 +29,8 @@ pub(crate) struct RepositoryPolicyOptions {
     pub trials: u32,
     pub parallelism: usize,
     pub agent_limits: AgentLimits,
+    pub max_run_cost_usd: Option<f64>,
+    pub pricing: Option<PricingTable>,
 }
 
 pub(crate) struct RepositoryRunOptions {
@@ -40,6 +43,8 @@ pub(crate) struct RepositoryRunOptions {
     pub agent_timeout_secs: Option<u64>,
     pub max_agent_tokens: Option<u64>,
     pub max_agent_cost_usd: Option<f64>,
+    pub max_run_cost_usd: Option<f64>,
+    pub pricing_path: Option<PathBuf>,
     pub agent_retries: u32,
     pub parallelism: Option<usize>,
     pub output: Option<PathBuf>,
@@ -102,10 +107,68 @@ pub(crate) fn build_execution_policy(
             verifier_max_output_bytes: verifier_defaults.max_output_bytes,
             agent_container,
             verifier_container,
+            max_run_cost_usd: options.max_run_cost_usd,
+            pricing: options.pricing,
         },
         digest: String::new(),
     }
     .sealed()
+}
+
+/// Validate an optional run-level cost cap from the command line.
+pub(crate) fn ensure_run_cost_cap(max_run_cost_usd: Option<f64>) -> Result<()> {
+    if let Some(cost) = max_run_cost_usd {
+        anyhow::ensure!(
+            cost.is_finite() && cost > 0.0,
+            "max-run-cost-usd must be a positive finite number"
+        );
+    }
+    Ok(())
+}
+
+/// Load an operator pricing file without echoing its host path.
+pub(crate) fn load_pricing(path: Option<&std::path::Path>) -> Result<Option<PricingTable>> {
+    path.map(|path| PricingTable::load(path).context("invalid --pricing file"))
+        .transpose()
+}
+
+/// Reject caps an agent cannot enforce in the benchmark profile, which fails
+/// closed. The development profile only warns. Agents without an explicit
+/// model are checked too; they can never match an exact price.
+pub(crate) fn preflight_cap_enforceability<'a>(
+    profile: &str,
+    agents: impl IntoIterator<Item = (&'a str, Option<&'a str>)>,
+    limits: &AgentLimits,
+    max_run_cost_usd: Option<f64>,
+    pricing: Option<&PricingTable>,
+) -> Result<()> {
+    if max_run_cost_usd.is_some() && limits.max_cost_usd.is_none() {
+        eprintln!(
+            "warning: --max-run-cost-usd is set without --max-agent-cost-usd, so trials \
+             still running when the run cap is reached can overshoot it without bound"
+        );
+    }
+    for (name, model) in agents {
+        if let Err(error) = ensure_caps_enforceable(name, model, limits, max_run_cost_usd, pricing)
+        {
+            anyhow::ensure!(
+                profile != "benchmark",
+                "benchmark profile rejects unenforceable caps: {error:#}"
+            );
+            if max_run_cost_usd.is_some() {
+                eprintln!(
+                    "warning: {error:#}; once one of its trials finishes without a known \
+                     cost, the run cost breaker cancels every trial not yet started"
+                );
+            } else {
+                eprintln!(
+                    "warning: {error:#}; the development profile continues and records \
+                     unverifiable usage as unavailable"
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 pub async fn execute(options: RepositoryRunOptions) -> Result<()> {
@@ -119,6 +182,8 @@ pub async fn execute(options: RepositoryRunOptions) -> Result<()> {
         agent_timeout_secs,
         max_agent_tokens,
         max_agent_cost_usd,
+        max_run_cost_usd,
+        pricing_path,
         agent_retries,
         parallelism,
         output,
@@ -144,10 +209,12 @@ pub async fn execute(options: RepositoryRunOptions) -> Result<()> {
             "max-agent-cost-usd must be a positive finite number"
         );
     }
+    ensure_run_cost_cap(max_run_cost_usd)?;
     anyhow::ensure!(
         matches!(profile.as_str(), "development" | "benchmark"),
         "unknown profile: {profile}; expected development or benchmark"
     );
+    let pricing = load_pricing(pricing_path.as_deref())?;
     let requested_agents = parse_requested_agents(
         agents
             .as_deref()
@@ -214,7 +281,26 @@ pub async fn execute(options: RepositoryRunOptions) -> Result<()> {
         max_retries: agent_retries,
         max_tokens: max_agent_tokens,
         max_cost_usd: max_agent_cost_usd,
+        require_enforceable_usage: profile == "benchmark",
+        run_cost_capped: max_run_cost_usd.is_some(),
     };
+    let agent_models = requested_agents
+        .iter()
+        .map(|requested| match &lock {
+            Some(lock) => Ok((
+                requested.name.as_str(),
+                Some(lock.agent(&requested.name)?.model.as_str()),
+            )),
+            None => Ok((requested.name.as_str(), requested.model.as_deref())),
+        })
+        .collect::<Result<Vec<_>>>()?;
+    preflight_cap_enforceability(
+        &profile,
+        agent_models,
+        &agent_limits,
+        max_run_cost_usd,
+        pricing.as_ref(),
+    )?;
     let policy = build_execution_policy(
         &config,
         RepositoryPolicyOptions {
@@ -225,6 +311,8 @@ pub async fn execute(options: RepositoryRunOptions) -> Result<()> {
             trials,
             parallelism,
             agent_limits: agent_limits.clone(),
+            max_run_cost_usd,
+            pricing: pricing.clone(),
         },
     );
     if let Some(lock) = &lock {
@@ -248,7 +336,12 @@ pub async fn execute(options: RepositoryRunOptions) -> Result<()> {
         preflight_locked_agents(&requested_agents, lock).await?;
     }
 
-    let agents = build_agents(&requested_agents, lock.as_ref(), profile.as_str())?;
+    let agents = build_agents(
+        &requested_agents,
+        lock.as_ref(),
+        profile.as_str(),
+        pricing.as_ref(),
+    )?;
     let grader: Arc<dyn Grader> = match runner_type {
         RunnerType::Local => Arc::new(LocalRepositoryGrader::new(4 * 1024 * 1024)),
         RunnerType::Docker => Arc::new(DockerRepositoryGrader::new(DockerVerifierConfig {
@@ -289,8 +382,20 @@ pub async fn execute(options: RepositoryRunOptions) -> Result<()> {
     let passed = report
         .trials
         .iter()
-        .filter(|trial| trial.status == forgetest_core::repository_report::TrialStatus::Passed)
+        .filter(|trial| trial.status == TrialStatus::Passed)
         .count();
+    let cancelled: Vec<_> = report
+        .trials
+        .iter()
+        .filter(|trial| trial.status == TrialStatus::Cancelled)
+        .collect();
+    if let Some(first) = cancelled.first() {
+        eprintln!(
+            "{} trials cancelled: {}",
+            cancelled.len(),
+            first.error.as_deref().unwrap_or("cancelled")
+        );
+    }
     eprintln!(
         "{passed}/{} trials passed; raw evidence: {}; public evidence: {}",
         report.trials.len(),
@@ -352,6 +457,7 @@ fn build_agents(
     requested: &[RequestedAgent],
     lock: Option<&BenchmarkLock>,
     profile: &str,
+    pricing: Option<&PricingTable>,
 ) -> Result<Vec<Arc<dyn AgentExecutor>>> {
     requested
         .iter()
@@ -377,14 +483,17 @@ fn build_agents(
                     model: locked.model.clone(),
                     configuration_digest: locked.configuration_digest.clone(),
                 };
-                Ok(Arc::new(DockerProcessAgent::new(
-                    profile,
-                    identity,
-                    DockerAgentConfig {
-                        image: locked.container_image.clone(),
-                        ..DockerAgentConfig::default()
-                    },
-                )) as Arc<dyn AgentExecutor>)
+                Ok(Arc::new(
+                    DockerProcessAgent::new(
+                        profile,
+                        identity,
+                        DockerAgentConfig {
+                            image: locked.container_image.clone(),
+                            ..DockerAgentConfig::default()
+                        },
+                    )
+                    .with_pricing(pricing.cloned()),
+                ) as Arc<dyn AgentExecutor>)
             } else {
                 let model = requested.model.as_deref().with_context(|| {
                     format!(
@@ -410,7 +519,10 @@ fn build_agents(
                         format!("{}\0{}\0development", requested.name, model).as_bytes(),
                     ),
                 };
-                Ok(Arc::new(ProcessAgent::new(profile, identity)) as Arc<dyn AgentExecutor>)
+                Ok(
+                    Arc::new(ProcessAgent::new(profile, identity).with_pricing(pricing.cloned()))
+                        as Arc<dyn AgentExecutor>,
+                )
             }
         })
         .collect()

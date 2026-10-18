@@ -2,6 +2,29 @@
 
 All notable changes to `forgetest` are documented here.
 
+## Unreleased
+
+### Added
+
+- `cost_source` on repository trial usage (`vendor`, `pricing-table`, or
+  `unavailable`), plus cache-write and reasoning token counts. Missing usage is
+  recorded as `unavailable`, never as zero, and is excluded from cost totals.
+- `--pricing` for `run` and `agents lock`: an operator-supplied `pricing.toml`
+  for agents that report tokens but no cost. No prices ship with `forgetest`.
+  The table is embedded in the execution policy and covered by its digest.
+- `--max-run-cost-usd`: a run-level cost breaker checked before each trial
+  starts. Trials it never starts are recorded as `cancelled`.
+- Benchmark preflight that rejects caps an agent cannot enforce.
+
+### Changed
+
+- `--max-agent-tokens` now counts uncached input, cache-read, cache-write, and
+  output tokens, so an existing token cap can bind sooner under an unchanged
+  policy digest.
+- Claude Code usage now comes from the final `result` event, including
+  `total_cost_usd`; Codex usage comes from `turn.completed`.
+- Repository trials start round-robin across trial index, task, and agent.
+
 ## 0.1.0 - 2026-07-29
 
 First public proof-of-concept release.
