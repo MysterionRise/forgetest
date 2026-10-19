@@ -44,3 +44,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-measurement-stage-0.md`
   summary: Decide how cancelled trials count in headline metrics (rate, Wilson interval, pass@1, pass^3, paired bootstrap) for the report-v3 verdict engine.
   evidence: Breaker-cancelled trials stay in scheduled as non-passes, so truncation lowers observed rates. Interleaved dispatch reduces the skew between agents but does not remove the bias.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-agent-images.md`
+  summary: Record the lock's cli_version from the CLI's stdout only, not the preflight's combined output with container stderr (assigned to S3 by the Don, 2026-10-19).
+  evidence: The credential-free lock made on the arm64 Mac records Docker's platform-mismatch warning and Codex's PATH-alias warning in cli_version, so the same images give a different cli_version on the amd64 runner and agents doctor fails across machines.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-agent-images.md`
+  summary: Wire the agent image recipes, the gated agent_images test and scripts/test-build-agent-images.sh into CI (candidate for the S6 governance re-baseline, which edits ci.yml).
+  evidence: No CI job builds the recipes or sets FORGETEST_AGENT_IMAGE_TEST, so the gated tests report ok without running, and a stale pin or broken recipe surfaces only at the next manual build-and-lock.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-agent-images.md`
+  summary: Decide where Codex keeps CODEX_HOME in agent containers. Under the agent profile HOME=/tmp/home, Codex refuses to create its PATH helper aliases under /tmp, and the /tmp tmpfs is noexec. S2 measures the effect; S3 may add a dedicated writable home outside /tmp.
+  evidence: Under the agent runtime flags Codex 0.163.0 warns "Refusing to create helper binaries under temporary dir /tmp", and the packaged rg was not on PATH in the container. Both come from the existing docker_arguments (HOME=/tmp/home, tmpfs /tmp without exec), not from the image recipes.

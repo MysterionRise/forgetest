@@ -1,0 +1,6 @@
+# Every image built from the repository root receives only what it copies.
+# The verifier needs its offline crate-cache manifest; the agent images need
+# nothing from the context. This keeps target/, .git/, forgetest-results/,
+# _bmad*/, studies/ and local agent or IDE state out of every build.
+*
+!docker/runner-cache/

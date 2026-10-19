@@ -2,7 +2,8 @@
 title: 'Agent images: pinned Codex CLI and Claude Code images for the benchmark profile'
 type: 'feature'
 created: '2026-10-18'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: 'c4db5941a0fa6cf695d16b95fa8c6635e7a9dc9f'
 review_loop_iteration: 0
 context:
   - '{project-root}/docker/agents/README.md'
@@ -55,7 +56,7 @@ images. None exist yet (`docker/agents/` contains only the contract README), so
 
 | Scenario | Input / State | Expected Output / Behavior | Error Handling |
 |----------|--------------|---------------------------|----------------|
-| Build | `scripts/build-agent-images.sh` with the default registry `localhost:5000` | Verifier, Codex and Claude images are built for linux/amd64 and pushed; three `@sha256` references printed | Starts a pinned `registry:2` if none is running |
+| Build | `scripts/build-agent-images.sh` with the default registry `localhost:5001` | Verifier, Codex and Claude images are built for linux/amd64 and pushed; three `@sha256` references printed | Starts a pinned `registry:2` if none is running |
 | Checksum mismatch | A tampered or changed download | Build fails before install and names the artifact | Non-zero exit |
 | Preflight | Image run the way `doctor_container` runs it (UID 65532, no network, read-only, `noexec` `/tmp`, no env) | Prints the binary path, the native binary's SHA-256, and version `0.163.0` / `2.1.302` | N/A |
 | Runtime contract | Arbitrary UID, `HOME=/tmp/home` not pre-created, read-only root | `codex --version` and `claude --version` exit 0 | Ask First if the CLI needs more |
@@ -94,36 +95,42 @@ images. None exist yet (`docker/agents/` contains only the contract README), so
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `docker/agents/codex.Dockerfile`
+- [x] `docker/agents/codex.Dockerfile`
   - Digest-pinned `rust:1.92.0-bookworm` base.
-  - Download the official `x86_64-unknown-linux-musl` Codex 0.163.0 release
-    asset, verify its SHA-256, and install it to `/usr/local/bin/codex`.
+  - Download the official Codex 0.163.0
+    `codex-package-x86_64-unknown-linux-musl.tar.gz` and verify it against the
+    vendor's `codex-package_SHA256SUMS`.
+  - Extract the whole package, unmodified, to `/opt/codex-0.163.0`, and verify
+    `bin/codex` against its pinned SHA-256.
+  - Symlink `/usr/local/bin/codex` to `/opt/codex-0.163.0/bin/codex`, so the
+    CLI finds its packaged helpers (`codex-code-mode-host`, `codex-path/rg`,
+    `codex-resources/bwrap`).
   - No ENTRYPOINT and no fixed USER.
-- [ ] `docker/agents/claude.Dockerfile`
+- [x] `docker/agents/claude.Dockerfile`
   - Same base.
   - Install the official native linux-x64 Claude Code 2.1.302 binary, verified
     against the vendor manifest checksum.
   - `ENV DISABLE_AUTOUPDATER=1 DISABLE_TELEMETRY=1 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`.
-- [ ] `.dockerignore`
+- [x] `.dockerignore`
   - Exclude `target/`, `.git/`, `forgetest-results/`, `_bmad*/` and other
     build-irrelevant trees.
   - Keep `docker/runner-cache` available to the verifier build.
-- [ ] `scripts/build-agent-images.sh`
+- [x] `scripts/build-agent-images.sh`
   - Uses buildx with `--platform linux/amd64`.
   - Builds the verifier and both agent images.
-  - Pushes to `${FORGETEST_IMAGE_REGISTRY:-localhost:5000}`. If that local
+  - Pushes to `${FORGETEST_IMAGE_REGISTRY:-localhost:5001}`. If that local
     registry isn't running, it starts a digest-pinned `registry:2`.
   - Prints `NAME=REF@sha256:…` lines.
   - Refuses remote registries unless `--allow-remote` is passed.
-- [ ] `crates/forgetest-agents/tests/agent_images.rs` -- a test gated on
+- [x] `crates/forgetest-agents/tests/agent_images.rs` -- a test gated on
   `FORGETEST_AGENT_IMAGE_TEST=1`, with image refs supplied via env:
   - `doctor_container` reports the pinned version and native SHA-256.
   - A runtime smoke run with forgetest's agent Docker flags, an arbitrary UID
     and a missing HOME passes `--version`.
-- [ ] `docker/agents/README.md` -- document the recipes, pinned versions and
+- [x] `docker/agents/README.md` -- document the recipes, pinned versions and
   checksum sources, the amd64-only rationale, the build script, the
   no-redistribution policy, and how to pass the refs to `agents lock`.
-- [ ] `CHANGELOG.md` -- add an Unreleased entry for the agent image recipes.
+- [x] `CHANGELOG.md` -- add an Unreleased entry for the agent image recipes.
 
 **Acceptance Criteria:**
 - Given Docker with buildx, when the build script runs with the default local
@@ -151,6 +158,40 @@ images. None exist yet (`docker/agents/` contains only the contract README), so
   adds them as digested profile arguments and environment.
 - **Remote publishing** (a private GHCR package for the pilot runner) happens
   later, under the S5 plan.
+- **`cli_version` is recorded from the preflight's combined output**, so it
+  includes container stderr, such as Docker's platform warning on arm64 and
+  Codex's PATH-alias warning. A lock made on arm64 therefore does not verify on
+  amd64 until S3 records the version from stdout only. This spec makes no Rust
+  change for it.
+
+## Spec Change Log
+
+- **2026-10-19, Don decisions at the step-3 Ask First gate.**
+  - Triggering findings:
+    - the vendor checksum file lists only the Codex package, not the
+      standalone binary;
+    - with only `bin/codex` installed, every `codex exec` reports
+      "Code Mode is unavailable", and the vendor sandbox (`bwrap`) is absent;
+    - macOS AirPlay Receiver holds port 5000;
+    - `cli_version` includes container stderr.
+  - Amended:
+    - the Codex task now installs the full verified package (Don: "Full
+      package as shipped");
+    - the default registry is now `localhost:5001` in the frozen Build row and
+      the build-script task (Don: "Default to localhost:5001", approving the
+      frozen amendment);
+    - the `cli_version` fix moves to S3 (Don: "Fold into S3").
+  - Known-bad states avoided:
+    - an image that lacks the vendor's helpers and sandbox;
+    - a default that fails on the maintainer's Mac;
+    - a Rust change outside this spec's approved scope.
+  - KEEP:
+    - the allowlist `.dockerignore`;
+    - the Claude recipe;
+    - `/etc/codex/config.toml`;
+    - registry probing, the pull-back by digest, and the remote refusal;
+    - the four gated tests;
+    - the README structure.
 
 ## Verification
 
@@ -163,3 +204,78 @@ images. None exist yet (`docker/agents/` contains only the contract README), so
   FORGETEST_CLAUDE_IMAGE=<ref> cargo test -p forgetest-agents --test
   agent_images` -- expected: pass.
 - The full local CI mirror -- expected: all steps pass.
+
+## Suggested Review Order
+
+**Vendor binaries, verified before install**
+
+- Entry point: the verified Codex package checksum gates everything after it.
+  [`codex.Dockerfile:36`](../../docker/agents/codex.Dockerfile#L36)
+
+- Whole package extracted as shipped; `bin/codex` checked again against its own pin.
+  [`codex.Dockerfile:40`](../../docker/agents/codex.Dockerfile#L40)
+
+- Symlink keeps `/usr/local/bin/codex` stable while helpers resolve beside the real binary.
+  [`codex.Dockerfile:48`](../../docker/agents/codex.Dockerfile#L48)
+
+- Claude's native binary checked against the vendor manifest checksum.
+  [`claude.Dockerfile:30`](../../docker/agents/claude.Dockerfile#L30)
+
+**Updates and telemetry off**
+
+- Codex has no env switches, so a system config applies even with `--ignore-user-config`.
+  [`codex.Dockerfile:54`](../../docker/agents/codex.Dockerfile#L54)
+
+- Claude's three switches as image ENV, covered by the image digest.
+  [`claude.Dockerfile:37`](../../docker/agents/claude.Dockerfile#L37)
+
+**Build script and registry boundary**
+
+- Remote registries refused unless `--allow-remote`; local ports validated first.
+  [`build-agent-images.sh:61`](../../scripts/build-agent-images.sh#L61)
+
+- Tags come from recipe ARGs, so a version bump cannot leave stale tags.
+  [`build-agent-images.sh:91`](../../scripts/build-agent-images.sh#L91)
+
+- Wrong buildx driver fails before the long verifier build.
+  [`build-agent-images.sh:108`](../../scripts/build-agent-images.sh#L108)
+
+- Probe distinguishes "nothing listening" from "something else holds the port".
+  [`build-agent-images.sh:121`](../../scripts/build-agent-images.sh#L121)
+
+- Single-manifest push, then pull-back by digest for forgetest's cleared-env Docker.
+  [`build-agent-images.sh:182`](../../scripts/build-agent-images.sh#L182)
+
+- Build context reduced to the verifier's crate-cache manifest.
+  [`.dockerignore:5`](../../.dockerignore#L5)
+
+**Documentation and limits**
+
+- Recipes, pins, checksum sources and what each digest covers.
+  [`README.md:47`](../../docker/agents/README.md#L47)
+
+- Known `cli_version` limitation, moved to S3 by the Don.
+  [`README.md:198`](../../docker/agents/README.md#L198)
+
+**Tests**
+
+- Gate panics on unexpected values instead of silently skipping.
+  [`agent_images.rs:35`](../../crates/forgetest-agents/tests/agent_images.rs#L35)
+
+- Preflight: pinned path, native SHA-256 and version line.
+  [`agent_images.rs:50`](../../crates/forgetest-agents/tests/agent_images.rs#L50)
+
+- Package helpers resolve and run for a non-root UID.
+  [`agent_images.rs:204`](../../crates/forgetest-agents/tests/agent_images.rs#L204)
+
+- Update and telemetry settings observed inside each image.
+  [`agent_images.rs:241`](../../crates/forgetest-agents/tests/agent_images.rs#L241)
+
+- No entrypoint or fixed user, read from the image config.
+  [`agent_images.rs:301`](../../crates/forgetest-agents/tests/agent_images.rs#L301)
+
+- Stub-based script test: refusal, ports, conflicts, driver and output contract.
+  [`test-build-agent-images.sh:119`](../../scripts/test-build-agent-images.sh#L119)
+
+- Unreleased entries for the recipes and the build-context change.
+  [`CHANGELOG.md:18`](../../CHANGELOG.md#L18)
