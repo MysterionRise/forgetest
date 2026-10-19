@@ -15,9 +15,25 @@ All notable changes to `forgetest` are documented here.
 - `--max-run-cost-usd`: a run-level cost breaker checked before each trial
   starts. Trials it never starts are recorded as `cancelled`.
 - Benchmark preflight that rejects caps an agent cannot enforce.
+- Agent image recipes in `docker/agents/` for Codex CLI 0.163.0 and Claude
+  Code 2.1.302. Each installs the vendor's native linux/amd64 build, checked
+  against the vendor-published SHA-256, on a digest-pinned Rust 1.92 base with
+  update checks and telemetry turned off. Codex is installed as its full
+  vendor package, so its Code Mode host, `rg` and `bwrap` sandbox helpers are
+  present. `scripts/build-agent-images.sh` builds them with the verifier,
+  pushes them to a local registry (`localhost:5001` by default), and prints
+  the `@sha256` references for `agents lock`. `forgetest` still publishes no
+  vendor CLI images. Known limitation: the lock's `cli_version` includes
+  container stderr, so a lock made on arm64 under emulation does not verify
+  on amd64.
+- A gated test, `FORGETEST_AGENT_IMAGE_TEST=1`, that checks the locked version
+  and native executable SHA-256 of built agent images and runs them under the
+  agent container flags.
 
 ### Changed
 
+- Docker builds from the repository root now receive only
+  `docker/runner-cache/` as context.
 - `--max-agent-tokens` now counts uncached input, cache-read, cache-write, and
   output tokens, so an existing token cap can bind sooner under an unchanged
   policy digest.

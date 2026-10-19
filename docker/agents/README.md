@@ -32,8 +32,8 @@ Before a benchmark:
 ```bash
 forgetest agents lock \
   --suite eval-suites/rust-agent-v1/suite.toml \
-  --agent codex/MODEL=REGISTRY/codex@sha256:DIGEST \
-  --agent claude/MODEL=REGISTRY/claude@sha256:DIGEST \
+  --agent codex/MODEL=REGISTRY/forgetest-codex@sha256:DIGEST \
+  --agent claude/MODEL=REGISTRY/forgetest-claude@sha256:DIGEST \
   --verifier-image REGISTRY/forgetest-runner-rust@sha256:DIGEST
 
 forgetest agents doctor --benchmark-lock benchmark.lock.toml
@@ -43,3 +43,180 @@ forgetest agents doctor --benchmark-lock benchmark.lock.toml
 network disabled. They record or verify each CLI version and executable
 SHA-256. Authentication checks for host development report only whether the
 expected environment variable exists; secret values are never printed.
+
+## Recipes
+
+This directory ships build recipes, not images. Each recipe installs the
+vendor's native build, verified against a vendor-published SHA-256, on
+`rust:1.92.0-bookworm` pinned by digest. The Rust toolchain is in the image
+because agents run `cargo test` inside `/work`.
+
+| Image | Recipe | Pinned version | Native executable SHA-256 |
+|---|---|---|---|
+| `forgetest-codex` | [`codex.Dockerfile`](codex.Dockerfile) | Codex CLI 0.163.0 | `399ff69c431c066e40de318fba45c2b07f45a76b19939d247ee4828fc70c4215` |
+| `forgetest-claude` | [`claude.Dockerfile`](claude.Dockerfile) | Claude Code 2.1.302 | `60d7eb7f12fbb28a52533fe8be5884097403562aa02dc73991a021c7067e29a5` |
+| `forgetest-runner-rust` | [`../forgetest-runner-rust.Dockerfile`](../forgetest-runner-rust.Dockerfile) | verifier | not applicable |
+
+The native executable SHA-256 is the `executable_sha256` that `agents lock`
+records, so the lock identifies the agent binary itself rather than a
+JavaScript launcher. Neither image contains Node.
+
+Each image carries its CLI as its vendor ships it, so the bundled helper tools
+differ between vendors. Codex's package ships `rg` and `bwrap`.
+
+Checksum sources. The pins live in each recipe's `ARG` values, copied from the
+vendor's checksum file or manifest on 2026-10-18. The build compares each
+download against those pins; it does not fetch a checksum file at build time.
+
+- **Codex.** The recipe downloads
+  `codex-package-x86_64-unknown-linux-musl.tar.gz` from the
+  [`rust-v0.163.0` release](https://github.com/openai/codex/releases/tag/rust-v0.163.0).
+  Its pin is that file's entry in the vendor's
+  [`codex-package_SHA256SUMS`](https://github.com/openai/codex/releases/download/rust-v0.163.0/codex-package_SHA256SUMS).
+  The standalone `codex-x86_64-unknown-linux-musl` archive is not listed in
+  that file, so the recipe does not use it. The whole package is extracted as
+  shipped to `/opt/codex-0.163.0`, owned by root, and `/usr/local/bin/codex` is
+  a symlink to its `bin/codex`. The recipe also checks `bin/codex` itself,
+  which is byte-identical to the standalone binary.
+- **Claude Code.** The recipe downloads
+  `https://downloads.claude.ai/claude-code-releases/2.1.302/linux-x64/claude`.
+  Its pin is `platforms."linux-x64".checksum` in the vendor's
+  [`manifest.json`](https://downloads.claude.ai/claude-code-releases/2.1.302/manifest.json),
+  the location and manifest the official installer uses.
+
+A tampered or changed download fails the build before anything is installed,
+and the error names the artifact.
+
+The Codex package keeps the vendor's helpers where Codex looks for them:
+`bin/codex-code-mode-host`, `codex-path/rg` and `codex-resources/bwrap`. They
+are present and Code Mode starts. Whether Codex's `bwrap` sandbox can start
+under the agent container flags is not yet verified. The package also contains
+a voice runtime that `codex exec` does not use.
+
+Both recipes turn off update checks and telemetry. Claude Code gets
+`DISABLE_AUTOUPDATER=1`, `DISABLE_TELEMETRY=1` and
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`. Codex gets a system-level
+`/etc/codex/config.toml` with `check_for_update_on_startup = false` and
+`analytics.enabled = false`; the profile's `--ignore-user-config` skips only
+`$CODEX_HOME/config.toml`, so this file still applies.
+
+The images contain no credentials, API keys, provider configuration, endpoint,
+model, or web-tool settings, and they set no `ENTRYPOINT` or fixed `USER`.
+Provider, endpoint, model, authentication and web-tool settings come from the
+built-in profile, whose arguments and environment allowlist are covered by the
+lock's configuration digest. The image-level update and telemetry settings
+above are covered by the image digest.
+
+To change a pinned version, update every place that names it:
+
+- the recipe's version `ARG` (`CODEX_VERSION` or `CLAUDE_CODE_VERSION`);
+- its checksum `ARG` values: `CODEX_PACKAGE_SHA256` and `CODEX_SHA256`, or
+  `CLAUDE_CODE_SHA256`;
+- the constants in `crates/forgetest-agents/tests/agent_images.rs`, including
+  the `/opt/codex-VERSION` package path; and
+- the table above.
+
+The build script derives image tags from the version `ARG` values. Rebuild and
+lock again afterwards.
+
+### Why linux/amd64 only
+
+One architecture means one set of images. Pulled from a shared private
+registry, the same image digests and executable SHA-256 values serve the
+x86-64 GitHub runner that executes published studies and, through emulation,
+an arm64 development machine. A lock becomes portable between the two only
+once `cli_version` is recorded from stdout only; see the known limitation
+below. Emulation also changes timing, so timings and timeouts on an arm64 host
+are not comparable with the amd64 runner. The recipes refuse to build for any
+other target.
+
+## Building
+
+```bash
+bash scripts/build-agent-images.sh
+```
+
+The script uses `docker buildx` to build the verifier, Codex and Claude Code
+images for `linux/amd64`. It pushes them to
+`${FORGETEST_IMAGE_REGISTRY:-localhost:5001}`, pulls each one back by digest so
+the local daemon has it, and prints one line per image:
+
+```text
+verifier=localhost:5001/forgetest-runner-rust@sha256:...
+codex=localhost:5001/forgetest-codex@sha256:...
+claude=localhost:5001/forgetest-claude@sha256:...
+```
+
+Build output goes to stderr, and stdout holds only these lines. `forgetest`
+runs `docker` with a cleared environment and no registry login, so locked
+images must already be present in the local daemon; the pull-back ensures
+this.
+
+Build with the same Docker daemon that `forgetest` uses. `forgetest` reaches
+Docker through `DOCKER_HOST` or the default socket, not through the CLI's
+current context.
+
+The script uses the current buildx builder and, for a local registry, stops
+unless it uses the `docker` driver, such as Docker's default builder. Inside a
+`docker-container` builder, `localhost` refers to the builder container rather
+than the host.
+
+If no registry answers on the local port, the script starts a digest-pinned
+`registry:2` container named `forgetest-registry-PORT`, bound to `127.0.0.1`.
+If another service already holds the port, the script stops with an error;
+choose a free port with `FORGETEST_IMAGE_REGISTRY=localhost:PORT`. The default
+avoids port 5000, which AirPlay Receiver holds on macOS.
+
+The script refuses a registry that is not on `localhost` or `127.0.0.1` unless
+`--allow-remote` is passed.
+
+`scripts/test-build-agent-images.sh` checks the script's argument handling,
+registry probing and output against stubbed `docker` and `curl`, without a
+network or a Docker daemon.
+
+## No redistribution
+
+`forgetest` never publishes vendor CLI images, and this repository contains
+only recipes. Build the images yourself and push them only to a registry you
+control. A remote registry used with `--allow-remote` must stay private; do
+not make vendor CLI images public.
+
+## Locking the images
+
+Pass the printed references to `agents lock`. With no API key in the
+environment, for example:
+
+```bash
+forgetest agents lock \
+  --suite eval-suites/rust-agent-v1/pilot.toml \
+  --agent codex/MODEL=localhost:5001/forgetest-codex@sha256:DIGEST \
+  --agent claude/MODEL=localhost:5001/forgetest-claude@sha256:DIGEST \
+  --verifier-image localhost:5001/forgetest-runner-rust@sha256:DIGEST \
+  --trials 1
+```
+
+Known limitation: `agents lock` records `cli_version` from the preflight's
+combined output, so it includes container stderr after the CLI's version line.
+That stderr can hold two warnings:
+
+- Docker's platform-mismatch warning, which appears only when an amd64 image
+  runs under emulation; and
+- Codex's warning that it could not create its PATH helper aliases. In the
+  preflight, `HOME` is `/` and the root is read-only. Under the agent runtime
+  flags, `HOME=/tmp/home`, and Codex refuses to create the aliases under
+  `/tmp`, so the warning appears at runtime as well.
+
+A lock made on an arm64 machine therefore does not verify on amd64, or the
+reverse, until `cli_version` is recorded from stdout only. The
+`executable_sha256` values are unaffected.
+
+The gated image test checks the same preflight, a runtime smoke run with the
+agent container flags, the Codex package helpers, the update and telemetry
+settings, and that neither image sets an entrypoint or a user:
+
+```bash
+FORGETEST_AGENT_IMAGE_TEST=1 \
+FORGETEST_CODEX_IMAGE=localhost:5001/forgetest-codex@sha256:DIGEST \
+FORGETEST_CLAUDE_IMAGE=localhost:5001/forgetest-claude@sha256:DIGEST \
+cargo test -p forgetest-agents --test agent_images
+```

@@ -281,3 +281,65 @@ The roundtable used public sources current to October 2026:
 - The JetBrains 2026 agent-adoption survey.
 - Cloud Security Alliance research notes on prompt injection through CI agents.
 - The LiteLLM PyPI compromise (2026-03-24).
+
+## Amendment 2026-10-18 (months 1–2 re-plan)
+
+A second three-role roundtable (Product Owner, AI CTO, Chief Technologist) re-planned months 1–2. The Don's decisions are recorded in
+`docs/governance/decisions/2026-10-18-don-decisions-months-1-2.md`. This
+amendment overrides the sections above wherever they conflict.
+
+**Endpoint.**
+- Paid access is through OpenRouter only.
+- Each study arm uses its own expiring OpenRouter key, with guardrails enforced
+  server-side:
+  - a provider allowlist containing only the first-party Anthropic and OpenAI
+    providers;
+  - a model allowlist;
+  - a USD budget.
+- The endpoint is a pre-registered, disclosed trial variable.
+- The not-doing item "an OpenTelemetry receiver, LiteLLM, or any third-party
+  gateway" now reads "no gateway in forgetest's code or supply chain". A
+  declared hosted endpoint is a trial variable, not infrastructure.
+
+**Keys.**
+- The Don creates scoped keys in the OpenRouter dashboard when a plan needs
+  them. There is no management key and no Broadcast bucket.
+- Billed usage is read per key before the key is revoked.
+
+**Codex sandbox.**
+- `workspace-write` is tried first.
+- If the live spike shows it cannot work inside the capability-dropped agent
+  container, switching to `danger-full-access` requires a Don decision record.
+
+**Month 2, re-scoped.**
+- The `forgetest meter` sidecar is cancelled. OpenRouter's billed records
+  become the source of truth for cost.
+- Month 3 builds a minimal egress seal (a CONNECT allowlist proxy on an
+  internal network) before `rust-agent-v1-r2` runs.
+- Homebrew and `dist` are dropped; cargo-binstall uses the existing release
+  archives.
+- New month-2 exit:
+  - v0.2 is on crates.io with the legacy path removed;
+  - cargo-binstall gets a user to a first report in under 10 minutes;
+  - per study arm, billed cost and stream-priced cost agree within ±2 percent,
+    or the gap is published.
+
+**Months 1–2 initiatives.** Each one is a flat plan under the lean-BMM ruling:
+
+| ID | Initiative | Notes |
+|---|---|---|
+| S1 | Agent images | |
+| S2 | Live spike | |
+| S3 | Benchmark profile v2 | Web tools off, endpoint preset, environment split, session tag, lock v2 |
+| S4 | Measurement follow-ups | Claude `modelUsage`, Codex cache writes, answering-model flag |
+| S5 | `rust-agent-pilot-r2` | |
+| S6 | Legacy removal and v0.2 | |
+| S7 | Egress-seal spike | Defines the month-3 plan |
+
+**pilot-r2 defaults.** These are confirmed when S5 is approved.
+- Primary arm: Claude Haiku 5.5 vs GPT-6 Luna at medium effort, 18 trials.
+- Calibration arm: Claude Sonnet 5.5 vs GPT-6.1 Sol, 6 trials.
+- Methods note only; no performance or ranking claim.
+
+**Months 1–2 paid spend.** At most USD 20 is planned; about USD 6.50 is
+expected. USD 30 stays reserved for v1-r2.
