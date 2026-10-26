@@ -56,3 +56,19 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-agent-images.md`
   summary: Decide where Codex keeps CODEX_HOME in agent containers. Under the agent profile HOME=/tmp/home, Codex refuses to create its PATH helper aliases under /tmp, and the /tmp tmpfs is noexec. S2 measures the effect; S3 may add a dedicated writable home outside /tmp.
   evidence: Under the agent runtime flags Codex 0.163.0 warns "Refusing to create helper binaries under temporary dir /tmp", and the packaged rg was not on PATH in the container. Both come from the existing docker_arguments (HOME=/tmp/home, tmpfs /tmp without exec), not from the image recipes.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-live-spike.md`
+  summary: S3 must apply the S2 findings before any trial: Claude `--verbose` and `--effort`, Codex `--skip-git-repo-check`, the OpenRouter endpoint presets, Codex `danger-full-access` (Don D5 decision 2026-10-26), bounded Codex retries, and a disclosed decision on Claude's built-in `agents-md` plugin versus Codex `--ignore-rules`.
+  evidence: results/spike-2026-10/FINDINGS.md shows both built-in profiles fail before any API call with the pinned CLIs, and lists the verified endpoint settings.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-live-spike.md`
+  summary: S5 per-arm keys must carry model and provider allowlists, and pilot-r2 must verify the guardrail negative on both endpoints with them.
+  evidence: The S2 key had no allowlists (Don decision 2026-10-22), so the guardrail row was not testable; without a provider allowlist, Anthropic models were served by Claude Platform on AWS.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-live-spike.md`
+  summary: Decide whether crates/forgetest-agents/tests/fixtures/ ships in the crates.io package (add include or exclude to the crate manifest) before the v0.2 release.
+  evidence: The crate manifest has no include or exclude, so cargo package includes the OpenRouter golden fixtures, which carry spike-derived usage and cost data.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-live-spike.md`
+  summary: Extend the BMAD sensitive-data scan to every file under docs/governance/decisions, not only records that the index or authority registry cites.
+  evidence: scripts/bmad_verify_sensitive.py scans decision records only when cited; the 2026-10-22 S2 key record and the 2026-10-18 S1/S2 approval record are no longer cited, so a key pasted into them would not be caught.

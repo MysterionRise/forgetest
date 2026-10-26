@@ -234,8 +234,8 @@
       "title": "Agent images: pinned Codex CLI and Claude Code images for the benchmark profile"
     },
     {
-      "approval_evidence": "docs/governance/decisions/2026-10-18-don-approval-agent-images-and-live-spike.md",
-      "approved_at": "2026-10-18T22:36:33Z",
+      "approval_evidence": "docs/governance/decisions/2026-10-26-don-d5-codex-sandbox-and-key.md",
+      "approved_at": "2026-10-26T15:15:03Z",
       "approver": "repository-don-001",
       "archive_authorizer": null,
       "archive_evidence": null,
@@ -243,10 +243,10 @@
       "artifact_type": "plan",
       "classification": "repository-visible",
       "id": "spec-live-spike",
-      "independence_exception_approved_at": "2026-10-18T22:36:33Z",
+      "independence_exception_approved_at": "2026-10-26T15:15:03Z",
       "independence_exception_approver": "repository-don-001",
-      "independence_exception_evidence": "docs/governance/decisions/2026-10-18-don-approval-agent-images-and-live-spike.md",
-      "independence_exception_rationale": "The repository Don owns this artifact, is the only registered human authority, and explicitly approved it at bmad-build CHECKPOINT 1 as recorded in the 2026-10-18 decision record.",
+      "independence_exception_evidence": "docs/governance/decisions/2026-10-26-don-d5-codex-sandbox-and-key.md",
+      "independence_exception_rationale": "The repository Don owns this artifact, is the only registered human authority, and explicitly decided the D5 go/no-go (Codex danger-full-access inside the hardened container) and kept the spike key active, as recorded in the 2026-10-26 decision record.",
       "owner": "repository-don-001",
       "parent": "forgetest-roadmap-2026-10",
       "path": "_bmad-output/implementation-artifacts/spec-live-spike.md",
@@ -274,7 +274,7 @@
     ],
     "maximum_effective_records_per_key": 1
   },
-  "index_revision": 14,
+  "index_revision": 16,
   "lifecycle_rules": {
     "approved_null_fields": [
       "superseded_by",
