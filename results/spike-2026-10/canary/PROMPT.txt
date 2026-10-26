@@ -1,0 +1,1 @@
+The test in src/lib.rs fails. Make the one-line fix in sum_to so that the range includes n, then run `cargo test` and confirm it passes.
