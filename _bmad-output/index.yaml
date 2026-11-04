@@ -206,6 +206,32 @@
       "supersession_authorizer": null,
       "supersession_evidence": null,
       "title": "Measurement stage 0: trustworthy usage, cost and budget enforcement"
+    },
+    {
+      "approval_evidence": "docs/governance/decisions/2026-11-04-don-decisions-replan.md",
+      "approved_at": "2026-11-04T21:45:15Z",
+      "approver": "repository-don-001",
+      "archive_authorizer": null,
+      "archive_evidence": null,
+      "archived_at": null,
+      "artifact_type": "plan",
+      "classification": "repository-visible",
+      "id": "spec-rustls-webpki-rustsec-2026-0382",
+      "independence_exception_approved_at": "2026-11-04T21:45:15Z",
+      "independence_exception_approver": "repository-don-001",
+      "independence_exception_evidence": "docs/governance/decisions/2026-11-04-don-decisions-replan.md",
+      "independence_exception_rationale": "The repository Don owns this artifact, is the only registered human authority, and explicitly approved the amended dependency-refresh spec at bmad-build CHECKPOINT 1 as recorded in the 2026-11-04 decision record.",
+      "owner": "repository-don-001",
+      "parent": null,
+      "path": "_bmad-output/implementation-artifacts/spec-rustls-webpki-rustsec-2026-0382.md",
+      "scope": "repository/dependencies/rustls-webpki-rustsec-2026-0382",
+      "status": "approved",
+      "superseded_at": null,
+      "superseded_by": null,
+      "supersedes": null,
+      "supersession_authorizer": null,
+      "supersession_evidence": null,
+      "title": "November 2026 dependency refresh: RUSTSEC-2026-0382 and four Dependabot bumps, lockfile-only"
     }
   ],
   "authority_registry": "_bmad-output/authorities.yaml",
@@ -222,7 +248,7 @@
     ],
     "maximum_effective_records_per_key": 1
   },
-  "index_revision": 10,
+  "index_revision": 13,
   "lifecycle_rules": {
     "approved_null_fields": [
       "superseded_by",
